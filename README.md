@@ -92,17 +92,50 @@ Transferring the asset to a new custody address must unset the recovery address.
 
 # Hub
 
-## Storage
+Users must operate a Hub, which is a dedicated server that stores their authenticated data. The Hub must stay online even when the user's devices go offline so that their followers can get their latest updates. Users publish their Hub URL to the Identity contract when signing up or changing Hubs.
 
-## Transport
+Hubs can store data from other users, which can be helpful for clients. Alice, Bob, and Charlie use three separate Hubs, and Alice wants to stay up to date with Bob and Charlie's messages. She sets her Hub to sync to their Hubs periodically. Instead of pinging Bob's Hub and Charlie's Hub every time her phone comes online, she can check her Hub for new messages. Hubs can be configured to download messages from an arbitrary set of users since data is cleanly sharded by user.
 
-## Peer Disovery
+Hubs can fetch data from untrusted sources because every message is self-authenticated. The Hub has to verify the signature and check that the signer is valid. Bob's Hub probably has a copy of Charlie's messages if Bob follows Charlie. So Alice's Hub can make a single request to Bob's Hub and get Bob's and Charlie's messages.  We can use this property to make the network scalable by adding a peer-to-peer gossip protocol. Hubs can fetch data from the closest trustworthy peer instead of going to the source every time.
+
+Users can run their own Hubs or even use a third-party service. They are incentivized to ensure that their Hubs operate correctly, otherwise, their messages will go unread. The Farcaster team will also operate Hubs as a public good that synchronizes messages for all well-behaved users on the network.
+
 
 ## API's
 
-## Ethereum Sync
+Hubs expose peer-to-peer API's to other Hubs which can be used to: 
+- **Fingerprint a user**: compare state of an account between hubs to determine if there is new data to sync.
+- **Request data in batches**: ask for a batch of data by FID, type and hash.
+
+Hubs expose client API’s to: 
+- **Upload messages** — upload a single authenticated message to the Hub. 
+- **Query messages**: flexible querying of messages, likely using QraphQL 
+- **Subscribe to messages** — subscriptions over websockets
+- **Export messages** — in structured CSV and other formats that can be ETL'd into a databse.
+
+The API will apply all the normal validation rules that are applied to messages fetched from peer Hubs. It also has some client specific rules which prevents clients from making mistakes. For instance, it will not accept messages with out-of-date timestamps or with timestamps lower than the previous message. 
 
 ## Upgradeability
+
+Hubs are intended to be upgraded often during the beta period.  New versions of the Hub will be released every 6 weeks and Hubs are programmed to automatically shut down 8 weeks after their release date. This timeline will slow down as we approach a stable relase. 
+
+**Minor Releases**: Every 6 weeks and fully backwards compatible with the earlier versions
+
+**Major Releases**: As needed, and with backwards incompatible changes to consensus. Major releases will begin by running the old consensus algorithm, and cut over to the new algorithm on a pre-determined Ethereum block.  
+
+## Security 
+
+### Eclipsing
+A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network.
+
+ Anyone who peers with these Hubs might assume them to be the truth, effectively blocking the user out of the network. Hubs always have a direct path to the source Hub via the URL in the source contract. We can use this combined with random sampling to "test" peers and score them based on how likely they are to have the latest data. Peers that fail this test are disconnected and placed on a ban list. 
+
+### Flooding
+A malicious user could get a FID and broadcast thousands of messages, flooding the network with unless data. Hubs could implement a per-FID rate limit, and repeat offenders could be placed on a temporary or permanent ignore list. Since FID's are cheap to acquire, this may not be sufficient. Hubs can also prioritze FIDs with a longer history or with valid usernames, since these are difficult to acquire.  
+
+### Denial of Service
+Since Hub API's are unauthenticated, a malicious Hub or client could spam a target Hub with requests bringing it down. These attacks are generally difficult to prevent without an authentication system, though IP-based rate limiting can be employed to make it harder. If it becomes sufficiently difficult, we can create an authentication and registration system for Hubs which makes this much easier to manage. 
+
 
 # Data 
 
