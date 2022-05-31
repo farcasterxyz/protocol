@@ -19,7 +19,7 @@
     4. [Verifications](#44-verifications)
     5. [Metadata](#45-metadata)
     6. [Root Revocations](#46-root-revocations)
-    7. [Other Considerations](#47-other-considerations)
+    7. [Sharding](#47-sharding)
 5. [Peering](#5-peering)
 6. [Upgradeability](#6-upgradeability)
     1. [Minor Upgrades](#61-minor-upgrades)
@@ -29,13 +29,14 @@
     2. [Eclipse Attacks](#72-eclipse-attacks)
     3. [Flooding Attacks](#73-flooding-attacks)
     4. [DDOS Attacks](#74-ddos-attacks)
+    5. [Replay Attacks](#75-replay-attacks)
 8. [URIs](#8-uris)
 
 # 1. Introduction
 
 Social networks have become an essential part of our lives over the last decade. Many of them began their journey as open platforms, courting developers to build on their APIs. These developers created new clients, discovered new UI paradigms, and even launched multi-billion dollar businesses that brought in many users. But over the last few years networks have turned away from developers. They've restricted APIs, implemented arbitrary review processes and have removed access with little notice or recourse. 
 
-Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol that empowers developers to build novel social networks. We define a sufficiently decentralized network as one where **two users who want to communicate are always able to, even if the network wants to prevent it**. Users on such networks must have full control over their identity (usernames), data (messages) and social graph (relationships to others) . If a third party controls any of these, they can prevent two users from communicating. Developers must also be free to build applications and have unrestricted access to the network and users must be free to switch between them. If there was only one app to connect to the network, it could prevent two users from communicating.  
+Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol that empowers developers to build novel social networks. We define a sufficiently decentralized network as one where **two users who want to communicate are always able to, even if the network wants to prevent it**. Users on such networks must have full control over their identity (usernames), data (messages) and social graph (relationships to others). If a third party controls any of these, they can prevent two users from communicating. Developers must also be free to build applications and have unrestricted access to the network and users must be free to switch between them. If there was only one app to connect to the network, it could prevent two users from communicating.  
 
 # 2. Concepts
 
@@ -180,9 +181,7 @@ Casts are managed using a [two-phase Set](https://en.wikipedia.org/wiki/Conflict
 Casts come in several different flavors and the protocol can be extended to support many more types in the future. Each type is stored in it's own two-phase set which may have additional rules for merging new messages into the set. 
 
 ### 4.2.1 Short Casts
-A short public post created by a user that can appear directly on their profile, as a reply to another cast, url or on-chain item.
-
-Short casts can have upto 280 unicode characters and two embeds. The `parentUri` property can reference any URI, except for itself or its children. 
+A short public post created by a user that can appear directly on their profile, as a reply to another cast, url or on-chain item. Short casts can have upto 280 unicode characters and two embeds. The `parentUri` property can reference any URI, except for itself or its children. 
 
 ```ts
 type CastShortTextBody = {
@@ -194,9 +193,7 @@ type CastShortTextBody = {
 ```
 
 ### 4.2.2 Recasts
-A share is a message that can make another cast appear on the accounts's profile.
-
-The set ensures that a recast message does not reference itself, and that only one recast exists for each value of `account` and `targetCastUri`. If multiple values are discovered, it keeps the one with the highest timestamp and highest lexicographical order, in that order. 
+A share is a message that can make another cast appear on the accounts's profile. The set ensures that a recast message does not reference itself, and that only one recast exists for each value of `account` and `targetCastUri`. If multiple values are discovered, it keeps the one with the highest timestamp and highest lexicographical order, in that order. 
 
 ```ts
 type CastRecastMessageBody = {
@@ -206,9 +203,7 @@ type CastRecastMessageBody = {
 ```
 
 ### 4.2.3 Deletes
-A delete is a message that instructs the set to remove a previously created cast. 
-
-The message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents permanetly from the network, which is desirable from a user perspective. The set ensures that the delete message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. 
+A delete is a message that instructs the set to remove a previously created cast. The message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents permanetly from the network, which is desirable from a user perspective. The set ensures that the delete message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. 
 
 ```ts
 type CastDeleteBody = {
@@ -262,14 +257,15 @@ type RootRevocationBody = {
 }
 ```
 
-## 4.7 Other Considerations
+## 4.7 Sharding
 
-- An implication of the delete behavior of signers is some some previously valid messages can now be reverted. For instance, a message that was previously deleted is now moved into ____ and can be ____. 
+Hubs can replicate data for specific accounts only, which is a useful property for scaling the network. If Farcaster grows large enough that a single server cannot support a Hub that replicates the entire network, the workload can be sharded across multiple Hubs. Hub operators can also avoid syncing data for users who are behaving maliciously or not relevant to the operator.
+
+Selective replication only provides a partial view of the network. If a Hub is syncing Alice's data it will become aware that she replied and liked one of Bob's posts. However, it will not know the contents of Bob's post, or the fact that Bob liked her reply and then proceeded to reply to it. An application that seeks to provide accurate like counts and serve up all the replies to a message should replicate as many users as possible.
 
 # 5. Peering
 
 This section is still under development and covers the protocols by which Hubs discover and exchange signed messages with their peers. 
-
 
 # 6. Upgradeability
 
@@ -302,8 +298,12 @@ A flooding attack is when a malicious user keeps acquiring new accounts and broa
 ## 7.4 DDOS Attacks
 A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitiamate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require aggressive mitigations like whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.  
 
+## 7.5 Replay Attacks
+A replay attack is when a malicious actor stores a copy of a user's message and is able to replay it to cause an action that the user did not intend. This attack is possible if a Signer is removed, since it may delete a message that causally removed a prior message from the state. Assume Alice added a "hello world" cast with Signer A and then deleted it with Signer B and then proceeded to delete Signer B. At this point, the cast is no longer present on the Hub but neither is the delete message. A malicious user with a copy of the "hello world" cast could replay it causing it to be accepted as valid. Fortunately, the attack is restricted to replaying previously valid messages and  Alice can issue a remove message from a currently valid signer to nullify it. 
+
 # 8. URIs
 
 This section is still under development and will cover a schema for URIs supported by Farcaster Message types.
+
 
 [^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163
