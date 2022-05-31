@@ -1,152 +1,309 @@
 # Farcaster Protocol
 
-Farcaster is a sufficiently decentralized social networking protocol where users can publish messages to followers. Anyone can build a Farcaster application and users are free to switch between them. Unlike other social networks, Farcaster gives users control over their username and developers access to the social graph. 
 
 ## Contents
-1. [Introduction](#introduction)
-2. [Identity](#identity)
-    1. [Identification Number](#identification-number)
-    2. [Name](#name)
-3. [Hub]()
-    1. [Storage]()
-    2. [Transport]()
-    3. [Peer Discovery]()
-    4. [API]()
-    5. [Ethereum Sync]()
-    6. [Upgradeability]()
-4. [Data]()
-    1. [Signing]()
-    2. [CRDTs]()
-    3. [Types]()
-        1. [Signer]()
-        2. [Root]()
-        3. [Cast]()
-        4. [Link]()
-        5. [Meta]()
-    4. [URIs](#uris) 
-    5. [Upgradeability]()
-5. [Applications]()
+1. [Introduction](#1-introduction)
+2. [Concepts](#2-concepts)
+    1. [Accounts](#21-accounts)
+    2. [Signed Messages](#22-signed-messages)
+    3. [Applications](#23-applications)
+    4. [Hubs](#24-hubs)
+3. [Identity System](#3-identity-system)
+    1. [Account Contract](#31-account-contract)
+    1. [Namespace Contract](#32-namespace-contract)
+    3. [Recovery](#33-recovery)
+4. [Replication](#4replication)
+    1. [Signers](#41-signers)
+    2. [Casts](#42-casts)
+    3. [Actions](#43-actions)
+    4. [Verifications](#44-verifications)
+    5. [Metadata](#45-metadata)
+    6. [Root Revocations](#46-root-revocations)
+    7. [Other Considerations](#47-other-considerations)
+5. [Peering](#5-peering)
+6. [Upgradeability](#6-upgradeability)
+    1. [Minor Upgrades](#61-minor-upgrades)
+    2. [Major Upgrades](#62-major-upgrades)
+7. [Security Considerations](#7-security-considerations)
+    1. [Signer Compromise](#71-signer-compromise)
+    2. [Eclipse Attacks](#72-eclipse-attacks)
+    3. [Flooding Attacks](#73-flooding-attacks)
+    4. [DDOS Attacks](#74-ddos-attacks)
+8. [URIs](#8-uris)
 
-# Introduction
+# 1. Introduction
 
-Social networks have become an essential part of our lives over the last decade. Many of these networks began their journey as open platforms, courting developers to build on their APIs. These developers created new clients, discovered new UI paradigms, and even launched multi-billion dollar businesses that brought in many users.
+Social networks have become an essential part of our lives over the last decade. Many of them began their journey as open platforms, courting developers to build on their APIs. These developers created new clients, discovered new UI paradigms, and even launched multi-billion dollar businesses that brought in many users. But over the last few years networks have turned away from developers. They've restricted APIs, implemented arbitrary review processes and have removed access with little notice or recourse. 
 
-Today, most networks have given up on the idea of being an open platform. APIs have been pared back, and no social network will allow anything resembling an alternate client to connect to the network. Builders with new ideas for monetization, moderation, signaling, or recommendation systems have no path to realizing them.
+Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol that empowers developers to build novel social networks. We define a sufficiently decentralized network as one where **two users who want to communicate are always able to, even if the network wants to prevent it**. Users on such networks must have full control over their identity (usernames), data (messages) and social graph (relationships to others) . If a third party controls any of these, they can prevent two users from communicating. Developers must also be free to build applications and have unrestricted access to the network and users must be free to switch between them. If there was only one app to connect to the network, it could prevent two users from communicating.  
 
-We believe that a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol for social networking will empower developers to build novel social networks. A protocol can be considered sufficiently decentralized if and only if **two users who want to communicate are always able to, even if the network wants to prevent it**. If true, this implies that users have complete control over their data and can give developers access to it. Developers, in turn, are free to build applications and monetize them in any way they like. Most importantly, no user is ever locked into a particular application as long as they control their identity. 
+# 2. Concepts
 
-Farcaster achieves sufficient decentralization by combining on-chain identities and off-chain signed data. New users must register a new identity on the Ethereum blockchain, owned by their address. They must then set up a server that stores their data off-chain known as a Farcaster Hub and publish its location on-chain. Finally, users can create new messages, sign them and store them on their Hub. Two users can always find each other by looking up the location of the other's Hub on the blockchain and downloading their messages. 
+Farcaster achieves sufficient decentralization through a hybrid architecture that has on-chain and off-chain components. 
 
-Hubs are a dynamic, peer-to-peer network of servers designed to store and replicate social data efficiently. Each Hub can choose the set of users it subscribes to and can change this at any time. They operate similarly to Bittorrent, and can download messages directly from the source or from a peer that has a copy. Since the user cryptographically signs each message, Hubs cannot tamper with messages as they move through the network.
+User identities are kept on-chain because they are valuable assets, and we want to leverage the security, composability and strong consistency guarantees of the Ethereum blockchain. On-chain identities are controlled by an Ethereum address, which is a public private key pair that can also sign off-chain messages.  
 
-# Identity
+User data cannot be practically stored on the Ethereum blockchain or any other L1 because of the strong privacy and scalability requirements. Instead users store their data off-chain on a server under their control known as a Farcaster Hub. All data must be cryptographically signed by the user's identity address before being published to the Hub. 
 
-An identity system is an important consideration in social network design as it affects security, user experience, and social dynamics. Pseudonymous-name networks like Reddit encourage different user behaviors from real-name networks like Facebook. Our goal with Farcaster is to design an identity system that is: 
+## 2.1 Accounts
 
-1. **Secure, decentralized, and pseudonymous**:  Users must be able to claim and use an identity on the network without third-party approval.
+An Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. An individual can operate several accounts as the same time, like a real-name account, a pseudonymous account and a company account.
 
-2. **User-friendly**: Acquiring an identity should be quick, cheap, and easy. In practical terms, users should be able to get started in under a minute for less than $10, without any special knowledge about blockchains or wallets.
+An account is created by minting a new account number from the Account contract on-chain. Each account number is like a primary key in a database, and points to a user-controlled address known as the `custody address`. Once an account is minted, the custody address can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography and verified usernames like `alice.eth`, which are all done off-chain with signed messages. 
 
-3. **Trustworthy**: Squatting and impersonation of scarce username resources should be addressed to ensure that they are owned by honest, active users. 
+## 2.2 Signed Messages
 
-On Farcaster, users establish identity by claiming a **Farcaster Identification Number (FIN)**. A FIN serves as a pointer to an account, similar to a primary key in a database. Users may have many social accounts and can get a FIN for each one. Users can optionally connect a FIN with an NFT username they own, like an ENS or [Farcaster name](#names). While identifiers can be acquired freely and in a decentralized manner, user namespaces are free to implement their own rules and regulations.
+Signed Messages are cryptographically signed messages from an account that are **tamper-proof** and **self-authenticating**. 
 
-Applications should always reference a user account by its FIN and never by username or display name. The FIN is the only identifier that is guaranteed to be decentralized and always point to the same account. Applications can replace the FIN with the currently associated display or verified username at render time. User accounts become easier to recognize and harder to impersonate when displayed this way, and users still retain the ability to change their username in the future. This design meets our goals and, as a side effect, addresses the [Zooko's Triangle](https://en.wikipedia.org/wiki/Zooko%27s_triangle) naming trilemma. 
+A Signed Message has a **message** object, which contains the data that will be signed. The message is then serialized, and then hashed and signed with the custody address. The hash, signature and signer public key are used to construct the **envelope**, which proves that the message is authentic and has not been modified. Any observer can verify the message by checking that: 
 
-## Identification Number
+1. The account number is owned by an address whose public key matches the public key in the envelope
+2. The serialized hash of message matches the hash in the envelope
+3. The signature in the envelope is verified by the signing scheme with the hash and public key.   
 
-A Farcaster Identification Number (FIN) is a deterministically generated number like `324234`. FINs are issued by the Farcaster Identity contract on the Ethereum blockchain, which ensures that an address can only hold one FIN at a time. FINs can be transferred between addresses, as long as this invariant is held. FINs begin at 0 and increment by 1 with every new identity issued, which is the most gas efficient way to issue unique identifiers on the EVM. They have a max size equal to the maximum value of a `uint256`, which is practically infinite for our needs. 
+Messages must contain an account number, to look up the `signerPubKey` on-chain, and a `timestamp`, to order messages. Timestamps are client provided, unverified and should be considered best-effort, since they are vunlerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew) and [clock drift](https://en.wikipedia.org/wiki/Clock_drift). Users who want to ensure perfect ordering can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate timestamps.
 
-Once a FIN is acquired, the address that owns it can publish signed messages to Farcaster Hubs which will verify this signature. Such messages can be used to publish new posts, set a display name or even connect a verified ERC-721 username to the FIN. 
+```ts
+type SignedMessage = {
+  message: {
+    body: any; 
+    account: number;
+    timestamp: number;
+  };
+  envelope: {
+    hash: string;
+    hashType: 'BLAKE2b';
+    signature: string;
+    signatureType: 'ed25519' | 'ecdsa-secp256k1';
+    signerPubKey: string;
+  }
+};
+```
 
-## Name
+Object serialization must be done according to [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashing must be performed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signing must be performed with an Ed25519 signature scheme, or in rare cases an ECDSA secp256k1 scheme. 
 
-A Farcaster Name is a human-friendly name like `alice` that can be acquired from the Namespace contract. Names must be unique and can have up to to 16 alphanumeric characters or dashes `^[a-zA-Z0-9-]{1,16}$`. The single dash (-) username will be reserved for a special system account and will not be claimable. 
 
-Names are issued as ERC-721 tokens that are fully composable with the NFT ecosystem. They are similar to prior systems like ENS, but have a few significant changes that make them more practical for use in a social network. For instance, names are restricted to a maximum of 16 ASCII characters with makes them easy to include in short messages and prevents [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack). They are also cheaper to mint and have a [recovery system](#recovery) that protects users against key loss. 
+## 2.3 Applications
+An application is a program that people use to interact with the Farcaster network. It can be standalone client that can be downloaded and run locally, or hosted software that runs on a cloud server and can be accessed through a specific client. Users are free to choose the type of application that best suits their needs. 
 
-Names have a registration fee of 0.01 ETH per year which is collected into the Farcaster Treasury. The fee can be paid on mint and must be renewed yearly transaction with a transaction on August 1st, also known as Farcaster Day. During mint, the fee is pro-rated for the year ending August 1st. Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. 
+A simple application might consist of a standalone desktop or mobile client that talks directly to a Farcaster Hub. It can publish new messages and view messages published by other accounts. Each client will need to be instantiated with a [valid signing key](#42-signer). 
+
+A more sophisticated application might introduce a proxy backend server between the Hub and the client. Advanced features like search can be implemented on this server. It might also operate as a hosted service, where it custodies keys for the user and performs all the signing on the backend.
+
+## 2.4 Hubs
+A Hub is an always-on server that validates, stores, and replicates Signed Messages. Applications store data on Hubs to make them available to their followers at all times.
+
+Hubs can fetch data from other Hubs, making it easier for mobile clients who tend to go offline a lot. For instance, Alice follows Bob and Charlie, who use separate Hubs. She configures her Hub to sync with their Hubs periodically. When her client comes online, it can fetch everyone's messages with a single call to her Hub.
+
+Every Hub monitors the Account Contract so that it can validate signed messages, and detect malicious Hubs that send forged data. Therefore, we can trust data about any user from any Hub because self-authentication prevents forgery. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can use a gossip protocol and fetch data from the closest peer with a copy instead of going to the user's actual Hub.
+
+Hubs form an **L2 network for storing social data**, though the network has different properties from blockchain-based L2s. Its consensus model has weaker consistency guarantees but stronger scalability guarantees because the network data is **shardable** down to the account level. Users can run their own Hub, share one with others or use a third-party service to host one on their behalf.
+
+# 3. Identity System
+
+The identity system ensures secure and decentralized ownership of user accounts. Users must be able to set up a new account without any third party approval. It should also be reasonably quick and cheap. For our purposes, we define this as being able to complete registration in under a minute and for less than $10. It is is also important that accounts are trustworthy and operated primarily by honest, active users. 
+
+Farcaster's Identity System is composed of two smart contracts - an **Account contract**, which creates new accounts, and a **Namespace contract** which issues usernames that can be used with accounts.
+
+## 3.1 Account Contract
+
+An account is created by calling `register` on the contract using a user-controlled Ethereum address. A new account number is issued and linked to this address. Accounts can be transferred between addresses, though the contract ensures that an address owns no more than one account at a time. 
+
+Account numbers start at 0 and are incremented by 1 every time a new account is registered, which is a gas efficient way to ensure unique account numbers. The account number is represented internally as a `uint256` counter and can be incremented up to ~ 10^77 which is practically infinite for our needs. 
+
+## 3.2 Namespace Contract
+
+A Farcaster Name like `@alice` can be minted from the Namespace contract and used on the protocol. 
+
+When minting a name, the contract checks that the name is unique and contains at most 16 alphanumeric characters or dashes `^[a-zA-Z0-9-]{1,16}$`. The single dash (-) username is reserved for a system account and will not be claimable. The mint happens over a two-phase commit reveal to prevent frontrunning registrations.
+
+Farcaster Names are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Farcaster Names have some properties that make them more practical. Names are cheaper to mint and can be [recovered](#recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and are easier to display because of the restricted length and character set. 
+
+A yearly fee of 0.01 ETH is charged for owning a name, and this must be renewed yearly on Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
 
 Names can be minted freely, but are subject to two policies enforced by governance: 
 
 1. During the first year, a "prior ownership" claim can be made if the user already owns the name on at least two major social media platforms, and the current owner does not own them on any platform. 
 
-2. During later years, community moderators can propose an "impersonation claim" to governance vote if someone is clearly impersonating or misleading users. For instance if someone acquires `@elonmusk` and pretends to actually be Elon. 
+2. During later years, community moderators can propose an "impersonation claim" to governance vote if someone is clearly impersonating or misleading users. 
 
 Names that expire or subject to a claim are moved back into the Farcaster Treasury, which may choose to transfer ownership to someone with "prior ownership" claims or auction them to the highest bidder. For impersonation claims, any fees that were previously paid are forefit.
 
+## 3.3 Recovery
 
-## Recovery
+Names and Addresses can be recovered if user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within 3 days, the recovery address can complete the transfer. 
 
-Users can recover both FIN's and Farcaster Names if the keys to the custody address are lost. A previously appointed **recovery address** can issue a time-delayed transfer request. After a waiting period of 3 days, the recovery address can complete the transaction if the custody address did not cancel it. To use the system, users set up a recovery address with the smart contract, after which: 
- 
-1. The recovery address can request a transfer at any time. 
-2. The custody address can cancel the transfer within three days.
-3. After three days have passed, the recovery address can complete the transfer.  
-4. The custody address can change the recovery address at any time.
+Users can set the recovery address to another address in their wallet, a multi-sig shared with friends, or a third-party recovery service. Users can also change the recovery address at any time. Ownership remains decentralized because the recovery address cannot make a transfer that the custody address does not approve. 
 
-Users can set the recovery address to a second address they control, a multi-sig shared with friends, or even a third-party recovery service. Since the recovery address can never move the asset if the custody address is active, it preserves the decentralized ownership property. 
+Transferring the asset to a new custody address must unset the recovery address. Otherwise, users may purchase a name on OpenSea only to have the previous owner claim it back stealthily with their recovery address.
 
-Transferring the asset to a new custody address must unset the recovery address. Otherwise, users may purchase a token on OpenSea only to have the previous owner claim it back stealthily with their recovery address. Any ERC token contract can implement this time-delayed recovery mechanism. 
+# 4. Replication
+
+Replication is the process by which Hubs accept new messages and determine a user's state. 
+
+Users send [messages](#41-self-authenticated-message) to a Hub for every action they take. If a user likes a URL, unlikes it, and likes it again, that creates three messages. A Hub that receives all messages will determine the current state of the URL as *liked by the user*. The Hub discards the first two messages to save space since they are no longer needed. Merging messages at the Hub level avoids client disagreements on state and saves space.
+
+Every message type will have different rules for the merge operation. For example, two likes on the same cast by the same user can be condensed into one, while two replies cannot. Hubs implement a Set for each message type, which is a [conflict-free replicated data type](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) that encodes specific validation and merge rules.
+
+Sets ensure [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency) so that two Hubs that receive the same messages over any period will always reach the same state. This property makes Hubs highly available since they can go offline at any time and always get back into sync. Formally, Sets are anonymous Δ-state CRDTs[^delta-state], and each message is a join-irreducible update on the set. 
+
+/// Diagram of the structure of a user's sets ///
+
+## 4.1 Signers
+
+A Signer is a message that authorizes a new keypair to sign messages on behalf of an account. 
+
+```ts
+type SignerMessage = {
+  active: boolean;
+  signerPublicKey: string;
+  schema: 'farcaster.xyz/schemas/v1/signer';
+};
+```
+
+When a Farcaster account is created its `custody address` is the only address that can sign messages on its behalf. It is known as a Root Signer, and its authority can be verified on-chain. A Root Signer can authorize Delegate Signers by creating a Signer message, and Delegate Signers can authorize more Delegates. If an account moves to a new custody address, this also becomes a valid Root Signer.  Valid signers can be represented as a series of trees, where each tree's root is a historical custody address. 
+
+Delegate signers must be Ed25519 keypairs and all signatures on the Farcaster network must be signed with this scheme. The only exceptions are signer messages created by root signers, which are ECDSA secp256k1 key pairs out of necessity. If a signer is compromised, it can be revoked by itself or any of its ancestors in the tree. All messages created by the signer and its children will be discarded, because there is no way to tell the user's messages from the attackers. 
+
+/// Diagram of Signer Tree ///
+
+The Signer Set is a is a modified [two-phase set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#2P-Set_(Two-Phase_Set)) with a combination of remove-wins and last-write-wins semantics.  New messages are added into the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or an ancestor. Once removed it can never be re-added, and it's child signers and messages signed by them are removed. 
+
+A conflict can occur if two parents add a message with the same `publicKey` in the message. This cannot be reconciled with the tree structure since it creates ambiguity about ancestry. If seen two such messages are seen, the set keeps the one with the highest timestamp and lexicographical hash, in that order. 
+
+## 4.2 Casts
+
+A Cast is a public message created by a user that is displayed on their profile.  It can contain text as well as links to media, on-chain activity or other casts. Users are allowed to delete casts at any time. 
+
+Casts are managed using a [two-phase Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#2P-Set_(Two-Phase_Set)), which has two collections: an **add set** and a **remove set**. New casts are placed in the add set and moved to the remove set when deleted by the user. Once a message is deleted, it can never be moved back into the add set. The Cast Set can be said to have "remove wins" semantics for the merge operation. 
+
+Casts come in several different flavors and the protocol can be extended to support many more types in the future. Each type is stored in it's own two-phase set which may have additional rules for merging new messages into the set. 
+
+### 4.2.1 Short Casts
+A short public post created by a user that can appear directly on their profile, as a reply to another cast, url or on-chain item.
+
+Short casts can have upto 280 unicode characters and two embeds. The `parentUri` property can reference any URI, except for itself or its children. 
+
+```ts
+type CastShortTextBody = {
+  embed: Embed;
+  text: string;
+  schema: 'farcaster.xyz/schemas/v1/cast-new';
+  parentUri?: URI;
+};
+```
+
+### 4.2.2 Recasts
+A share is a message that can make another cast appear on the accounts's profile.
+
+The set ensures that a recast message does not reference itself, and that only one recast exists for each value of `account` and `targetCastUri`. If multiple values are discovered, it keeps the one with the highest timestamp and highest lexicographical order, in that order. 
+
+```ts
+type CastRecastMessageBody = {
+  targetCastUri: URI;
+  schema: 'farcaster.xyz/schemas/v1/cast-recast';
+};
+```
+
+### 4.2.3 Deletes
+A delete is a message that instructs the set to remove a previously created cast. 
+
+The message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents permanetly from the network, which is desirable from a user perspective. The set ensures that the delete message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. 
+
+```ts
+type CastDeleteBody = {
+  targetCastHash: string;
+  schema: 'farcaster.xyz/schemas/v1/cast-delete';
+};
+```
+
+### 4.2.4 Embeds
+A data structure used to embed URIs within a cast. Clients should hydrate these URIs and show an inline preview when rendering the cast in the UI. 
+
+```ts
+type Embed = {
+  items: URI[];
+};
+```
+
+## 4.3 Actions
+
+An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions at any time. Conceptually, each action is an edge of the social graph of the Farcaster network.
+
+Actions are managed with a Set that loosely resembles a [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)). Only one action in the set can have the same `type` and `targetUri`. If a second action is seen, the one with the highest timestamp is retained. If the timestamps are equal, the one with the lowest lexicographical hash order is retained.
+
+```ts
+type ActionMessageBody = {
+  active: boolean;
+  type: 'like' | 'follow'
+  targetUri: FarcasterURI;
+  schema: 'farcaster.xyz/schemas/v1/action';
+};
+```
+
+## 4.4 Verifications
+
+This section is still in progress, and will cover a CRDT for verified data types, including proof of ownership of an address or a specific NFT.s 
+
+## 4.5 Metadata
+
+This section is still in progress, and will cover a CRDT for allowing arbitrary metdata to be added to a user's account like a display name or profile picture. 
+
+## 4.6 Root Revocations
+
+A Root Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an account. 
+
+A revocation message must include the blockchash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid root signer. All previous custody addresses and delegate signers issued by them are invalidated.
+
+```ts
+type RootRevocationBody = {
+  blockHash: string;
+  schema: 'farcaster.xyz/schemas/v1/root-revocation';
+}
+```
+
+## 4.7 Other Considerations
+
+- An implication of the delete behavior of signers is some some previously valid messages can now be reverted. For instance, a message that was previously deleted is now moved into ____ and can be ____. 
+
+# 5. Peering
+
+This section is still under development and covers the protocols by which Hubs discover and exchange signed messages with their peers. 
 
 
-# Hub
+# 6. Upgradeability
 
-Users must operate a Hub, which is a dedicated server that stores their authenticated data. The Hub must stay online even when the user's devices go offline so that their followers can get their latest updates. Users publish their Hub URL to the Identity contract when signing up or changing Hubs.
+Farcaster is intended to be a long-lived protocol and built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular, painless and bring improvements for users and operators. New versions of the Hub will be released every 6 weeks. Upgrading should require just a few minutes of downtime for the operator in most cases. Hubs come with a "time bomb" which forces them to shut down 2 weeks after a new release is published.
 
-Hubs can store data from other users, which can be helpful for clients. Alice, Bob, and Charlie use three separate Hubs, and Alice wants to stay up to date with Bob and Charlie's messages. She sets her Hub to sync to their Hubs periodically. Instead of pinging Bob's Hub and Charlie's Hub every time her phone comes online, she can check her Hub for new messages. Hubs can be configured to download messages from an arbitrary set of users since data is cleanly sharded by user.
+## 6.1 Minor Upgrades
 
-Hubs can fetch data from untrusted sources because every message is self-authenticated. The Hub has to verify the signature and check that the signer is valid. Bob's Hub probably has a copy of Charlie's messages if Bob follows Charlie. So Alice's Hub can make a single request to Bob's Hub and get Bob's and Charlie's messages.  We can use this property to make the network scalable by adding a peer-to-peer gossip protocol. Hubs can fetch data from the closest trustworthy peer instead of going to the source every time.
+A minor upgrade is a backwards compatible change to the Farcaster consensus protocol. The old and new versions of the protocol can run safely side by side and reach consensus on the network. Some examples of minor upgrades including adding a new type of message, removing an existing message type or modifying message schemas to add new, optional properties. 
 
-Users can run their own Hubs or even use a third-party service. They are incentivized to ensure that their Hubs operate correctly, otherwise, their messages will go unread. The Farcaster team will also operate Hubs as a public good that synchronizes messages for all well-behaved users on the network.
+## 6.2 Major Upgrades
 
+A major upgrade is a backwards incompatible change to the Farcaster consensus protocol. If the new protocol and the old protocol were run side by side, they might end up in a divergent state. Some example of upgrades that may require major changes are changes to the merge logic in sets or adding new required properties to schemas.
 
-## API's
+Backwards incompatible changes to an existing schema are possible, but discouraged since they increase protocol complexity. The Hubs must assume that old data and new data can live side-by-side and will have to have special consensus rules to handle both. 
 
-Hubs expose peer-to-peer API's to other Hubs which can be used to: 
-- **Fingerprint a user**: compare state of an account between hubs to determine if there is new data to sync.
-- **Request data in batches**: ask for a batch of data by FID, type and hash.
+Hub releases that include backwards incompatible changes must implement both consensus algorithms. They are programmed to run the old consensus model until a specific Ethereum block is mined. This block is chosen such that it will occur after the release time bomb goes off, which gives us high confidence that all nodes are running the new version and switch to the new algorithm at once. 
 
-Hubs expose client API’s to: 
-- **Upload messages** — upload a single authenticated message to the Hub. 
-- **Query messages**: flexible querying of messages, likely using QraphQL 
-- **Subscribe to messages** — subscriptions over websockets
-- **Export messages** — in structured CSV and other formats that can be ETL'd into a databse.
+# 7. Security Considerations
 
-The API will apply all the normal validation rules that are applied to messages fetched from peer Hubs. It also has some client specific rules which prevents clients from making mistakes. For instance, it will not accept messages with out-of-date timestamps or with timestamps lower than the previous message. 
+## 7.1 Signer Compromise
 
-## Upgradeability
+A malicious attacker can use a compromised delegate signer to impersonate the user by signing messages. As long as the user has control over a parent signer or the root signer, they can invalidate the signare and issue a new one. Unfortuantely, this means that all messages signed by that signer will be lost permanently since we cannot tell which ones were signed by the attacker. Clients can mitigate this by constantly rolling keys after every few thousand messages, which limits the scope of how many messages will be lost when a signer is reset.
 
-Hubs are intended to be upgraded often during the beta period.  New versions of the Hub will be released every 6 weeks and Hubs are programmed to automatically shut down 8 weeks after their release date. This timeline will slow down as we approach a stable relase. 
+## 7.2 Eclipse Attacks
+A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network. Hubs can maintain an internal score for each peer based on data availability. Periodically, they lookup the location of the user's source Hub which is published in the account contract and sync the latest messages. If their peers do not have an up-to-date copy of this, their scores are lowered until eventally the peer is dropped and a new one is selected.  
 
-**Minor Releases**: Every 6 weeks and fully backwards compatible with the earlier versions
+## 7.3 Flooding Attacks 
+A flooding attack is when a malicious user keeps acquiring new accounts and broadcasting thousands of messages. Hubs may attempt to sync this data bloating their on-disk storage and causing network congestion which leads to stale data for legitimate user accounts. An account scoring system can help alleviate this by prioritizing trustworthy accounts and temporarily or permanently banning misbehaving accounts. Each Hub tracks its own score for an account which starts at zero. The score increases if the account has a valid username and a history of behaving well. It decreases when malicious behavior like flooding is obsered.
 
-**Major Releases**: As needed, and with backwards incompatible changes to consensus. Major releases will begin by running the old consensus algorithm, and cut over to the new algorithm on a pre-determined Ethereum block.  
+## 7.4 DDOS Attacks
+A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitiamate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require aggressive mitigations like whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.  
 
-## Security 
+# 8. URIs
 
-### Eclipsing
-A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network.
+This section is still under development and will cover a schema for URIs supported by Farcaster Message types.
 
- Anyone who peers with these Hubs might assume them to be the truth, effectively blocking the user out of the network. Hubs always have a direct path to the source Hub via the URL in the source contract. We can use this combined with random sampling to "test" peers and score them based on how likely they are to have the latest data. Peers that fail this test are disconnected and placed on a ban list. 
-
-### Flooding
-A malicious user could get a FID and broadcast thousands of messages, flooding the network with unless data. Hubs could implement a per-FID rate limit, and repeat offenders could be placed on a temporary or permanent ignore list. Since FID's are cheap to acquire, this may not be sufficient. Hubs can also prioritze FIDs with a longer history or with valid usernames, since these are difficult to acquire.  
-
-### Denial of Service
-Since Hub API's are unauthenticated, a malicious Hub or client could spam a target Hub with requests bringing it down. These attacks are generally difficult to prevent without an authentication system, though IP-based rate limiting can be employed to make it harder. If it becomes sufficiently difficult, we can create an authentication and registration system for Hubs which makes this much easier to manage. 
-
-
-# Data 
-
-## Signing
-
-## CRDT's
-
-## Types
-
-## URIs
-
-## Upgradeability
-
-# Applications
+[^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163
