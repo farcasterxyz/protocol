@@ -35,37 +35,37 @@
 
 # 1. Introduction
 
-Social networks have become an essential part of our lives over the last decade. Many of them began their journey as open platforms, courting developers to build on their APIs. These developers created new clients, discovered new UI paradigms, and even launched multi-billion dollar businesses that brought in many users. But over the last few years networks have turned away from developers. They've restricted APIs, implemented arbitrary review processes and have removed access with little notice or recourse. 
+Social networks have become an essential part of our lives over the last decade. Many began their journey as open platforms, courting developers to build on their APIs. These developers created new clients, discovered new UI paradigms, and even launched multi-billion dollar businesses that brought in many users. However, networks have turned away from developers over the last few years. They have restricted APIs, implemented arbitrary review processes, and removed access with little notice or recourse.
 
-Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol that empowers developers to build novel social networks. We define a sufficiently decentralized network as one where **two users who want to communicate are always able to, even if the network wants to prevent it**. Users on such networks must have full control over their identity (usernames), data (messages) and social graph (relationships to others). If a third party controls any of these, they can prevent two users from communicating. Developers must also be free to build applications and have unrestricted access to the network and users must be free to switch between them. If there was only one app to connect to the network, it could prevent two users from communicating.  
+Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol that empowers developers to build novel social networks. We define a sufficiently decentralized network as one where two users who want to communicate are always able to, even if the network wants to prevent it. Users on such networks must have complete control over their identity (usernames), data (messages), and social graph (relationships to others). If a third party controls any of these, they can prevent two users from communicating. Developers must also be free to build applications and have unrestricted access to the network, and users must be free to switch between them. If there was only one app to connect to the network, it could prevent two users from communicating.
 
 # 2. Concepts
 
-Farcaster achieves sufficient decentralization through a hybrid architecture that has on-chain and off-chain components. 
+Farcaster achieves sufficient decentralization through a hybrid architecture with on-chain and off-chain components.
 
-User identities are kept on-chain because they are valuable assets, and we want to leverage the security, composability and strong consistency guarantees of the Ethereum blockchain. On-chain identities are controlled by an Ethereum address, which is a public private key pair that can also sign off-chain messages.  
+The protocol stores user identities on  Ethereum to leverage its robust security, composability, and strong consistency guarantees. An Ethereum address controls the on-chain identity and can be used to sign off-chain messages on behalf of the identity. 
 
-User data cannot be practically stored on the Ethereum blockchain or any other L1 because of the strong privacy and scalability requirements. Instead users store their data off-chain on a server under their control known as a Farcaster Hub. All data must be cryptographically signed by the user's identity address before being published to the Hub. 
+Ethereum and other L1 blockchains cannot practically store the large volume of data that users generate. Instead, users store their data off-chain on a server under their control known as a Farcaster Hub. The user's identity address must cryptographically sign all data before sending it to the Hub.
 
 <!-- Diagram covering the major architectural concepts  -->
 
 ## 2.1 Accounts
 
-An Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. An individual can operate several accounts as the same time, like a real-name account, a pseudonymous account and a company account.
+A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. An individual can operate several accounts simultaneously, like a real-name account, a pseudonymous account, and a company account. 
 
-An account is created by minting a new account number from the Account contract on-chain. Each account number is like a primary key in a database, and points to a user-controlled address known as the `custody address`. Once an account is minted, the custody address can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography and verified usernames like `alice.eth`, which are all done off-chain with signed messages. 
+An address can mint a new account from the account contract, which issues it an account number. This address is known as the custody address, and it can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography, and verified usernames like `alice.eth`, which are all done off-chain with signed messages.
 
 ## 2.2 Signed Messages
 
-Signed Messages are cryptographically signed messages from an account that are **tamper-proof** and **self-authenticating**. 
+Signed Messages are objects that are **tamper-proof** and **self-authenticating**.
 
-A Signed Message has a **message** object, which contains the data that will be signed. The message is then serialized, and then hashed and signed with the custody address. The hash, signature and signer public key are used to construct the **envelope**, which proves that the message is authentic and has not been modified. Any observer can verify the message by checking that: 
+A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed with the custody address. The **envelope** property contains this hash, signature, and the public key of the custody address. It can be used to verify the message's authenticity with the following steps: 
 
-1. The account number is owned by an address whose public key matches the public key in the envelope
-2. The serialized hash of message matches the hash in the envelope
-3. The signature in the envelope is verified by the signing scheme with the hash and public key.   
+1. Look up the custody address of the account number and verify that its public key matches the envelope's `signerPubKey`.
+2. Serialize and hash the message and verify that it matches the envelope's `hash`.
+3. Verifying the signature scheme with the envelope's `signature`, `hash`, and `signerPubKey`.
 
-Messages must contain an account number, to look up the `signerPubKey` on-chain, and a `timestamp`, to order messages. Timestamps are client provided, unverified and should be considered best-effort, since they are vunlerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew) and [clock drift](https://en.wikipedia.org/wiki/Clock_drift). Users who want to ensure perfect ordering can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate timestamps.
+The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an account number to look up the custody address on-chain and a timestamp for ordering. Timestamps are client-provided, unverified, and should be considered best-effort since they are vulnerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew) and [clock drift](https://en.wikipedia.org/wiki/Clock_drift). Users who want to ensure perfect ordering can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate timestamps.
 
 ```ts
 type SignedMessage = {
@@ -84,24 +84,24 @@ type SignedMessage = {
 };
 ```
 
-Object serialization must be done according to [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashing must be performed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signing must be performed with an Ed25519 signature scheme, or in rare cases an ECDSA secp256k1 scheme. 
-
-
 ## 2.3 Applications
-An application is a program that people use to interact with the Farcaster network. It can be standalone client that can be downloaded and run locally, or hosted software that runs on a cloud server and can be accessed through a specific client. Users are free to choose the type of application that best suits their needs. 
 
-A simple application might consist of a standalone desktop or mobile client that talks directly to a Farcaster Hub. It can publish new messages and view messages published by other accounts. Each client will need to be instantiated with a [valid signing key](#42-signer). 
+An *application* is a program that people use to interact with the Farcaster network. Users can choose the type of application that best suits their needs and switch between them at any time. 
 
-A more sophisticated application might introduce a proxy backend server between the Hub and the client. Advanced features like search can be implemented on this server. It might also operate as a hosted service, where it custodies keys for the user and performs all the signing on the backend.
+A simple application might consist of a standalone desktop or mobile client that talks directly to a Farcaster Hub. It can publish new messages and view messages published by other accounts. Such applications are **self-hosted** and must be instantiated with the custody address or [valid signing key](#42-signer).
+
+A more sophisticated application might add a proxy backend server that indexes data from Hubs. Indexing allows servers to implement features like search, algorithmic feeds, and spam detection that are difficult or expensive to perform on the Hub. Such applications can be **self-hosted** by storing keys on the client; **delegated** by asking users for a [delegate signing key](#42-signer); or **hosted** by managing all keys including the custody address.
 
 ## 2.4 Hubs
-A Hub is an always-on server that validates, stores, and replicates Signed Messages. Applications store data on Hubs to make them available to their followers at all times.
+A Hub is an always-on server that validates, stores, and replicates Signed Messages. 
 
-Hubs can fetch data from other Hubs, making it easier for mobile clients who tend to go offline a lot. For instance, Alice follows Bob and Charlie, who use separate Hubs. She configures her Hub to sync with their Hubs periodically. When her client comes online, it can fetch everyone's messages with a single call to her Hub.
+Users must upload messages they create to a primary Hub and publish its URL on-chain using the Account contract. Their followers can use this Hub to find and download their messages. Users can run a Hub themselves or use a third-party Hub service. They are incentivized to ensure that it works correctly, or their followers will not receive their messages.
 
-Every Hub monitors the Account Contract so that it can validate signed messages, and detect malicious Hubs that send forged data. Therefore, we can trust data about any user from any Hub because self-authentication prevents forgery. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can use a gossip protocol and fetch data from the closest peer with a copy instead of going to the user's actual Hub.
+Users can also configure their primary Hub to replicate data from other Hubs. If Alice follows Bob and Charlie, who use separate Hubs, she can configure her Hub to download messages from theirs. When her client comes online, it can make a single request to her Hub and fetch Bob and Charlie's messages. 
 
-Hubs form an **L2 network for storing social data**, though the network has different properties from blockchain-based L2s. Its consensus model has weaker consistency guarantees but stronger scalability guarantees because the network data is **shardable** down to the account level. Users can run their own Hub, share one with others or use a third-party service to host one on their behalf.
+Hubs maintain a connection to the Account Contract to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by *any* user from *any* Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's primary Hub.
+
+Conceptually, Hubs form an **L2 network for storing social data**, though the network has different properties from blockchain-based L2s. Its consensus model has weaker consistency guarantees but stronger scalability guarantees because the network data is **shardable** down to the account level.
 
 # 3. Identity System
 
@@ -325,6 +325,8 @@ Developers and operators can veto a change if they disagree with it, but at some
 ## Contract Changes
 
 Changes that involve on-chain systems must be implemented by deploying a new contract or upgrading an existing one. The Farcaster team will implement these changes and ensure that they are thoroughly audited. Contracts will be controlled by a multi-sig whose ownership is split between members of the Farcaster team during beta. Over time, control over making contract changes will be decentralized to other parties who have a vested interested in ensuring the success of the network. 
+
+[^gossip-sub]: Dimitris Vyzovitis, Yusef Napora, Dirk McCormick, David Dias, Yiannis Psaras: “GossipSub: Attack-Resilient Message Propagation in the Filecoin and ETH2.0 Networks”, 2020; [http://arxiv.org/abs/2007.02754 arXiv:2007.02754].
 
 [^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163
 
