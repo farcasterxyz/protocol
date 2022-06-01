@@ -9,8 +9,8 @@
     3. [Applications](#23-applications)
     4. [Hubs](#24-hubs)
 3. [Identity System](#3-identity-system)
-    1. [Account Contract](#31-account-contract)
-    1. [Namespace Contract](#32-namespace-contract)
+    1. [Account Registry](#31-account-registry)
+    1. [Namespace Contract](#32-namespace-registry)
     3. [Recovery](#33-recovery)
 4. [Replication](#4replication)
     1. [Signers](#41-signers)
@@ -53,7 +53,7 @@ Ethereum and other L1 blockchains cannot practically store the large volume of d
 
 A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. An individual can operate several accounts simultaneously, like a real-name account, a pseudonymous account, and a company account. 
 
-An address can mint a new account from the account contract, which issues it an account number. This address is known as the custody address, and it can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography, and verified usernames like `alice.eth`, which are all done off-chain with signed messages.
+An address can mint a new account from the AccountRegistry, which issues it an account number. This address is known as the custody address, and it can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography, and verified usernames like `alice.eth`, which are all done off-chain with signed messages.
 
 ## 2.2 Signed Messages
 
@@ -95,47 +95,48 @@ A more sophisticated application might add a proxy backend server that indexes d
 ## 2.4 Hubs
 A Hub is an always-on server that validates, stores, and replicates Signed Messages. 
 
-Users must upload messages they create to a primary Hub and publish its URL on-chain using the Account contract. Their followers can use this Hub to find and download their messages. Users can run a Hub themselves or use a third-party Hub service. They are incentivized to ensure that it works correctly, or their followers will not receive their messages.
+Users must upload messages they create to a primary Hub and publish its URL on-chain using the AccountRegistry. Their followers can use this Hub to find and download their messages. Users can run a Hub themselves or use a third-party Hub service. They are incentivized to ensure that it works correctly, or their followers will not receive their messages.
 
 Users can also configure their primary Hub to replicate data from other Hubs. If Alice follows Bob and Charlie, who use separate Hubs, she can configure her Hub to download messages from theirs. When her client comes online, it can make a single request to her Hub and fetch Bob and Charlie's messages. 
 
-Hubs maintain a connection to the Account Contract to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by *any* user from *any* Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's primary Hub.
+Hubs maintain a connection to the Account Registry to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by *any* user from *any* Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's primary Hub.
 
 Conceptually, Hubs form an **L2 network for storing social data**, though the network has different properties from blockchain-based L2s. Its consensus model has weaker consistency guarantees but stronger scalability guarantees because the network data is **shardable** down to the account level.
 
-# 3. Identity System
+# 3. Identity Registry
 
-The identity system ensures secure and decentralized ownership of user accounts. Users must be able to set up a new account without any third party approval. It should also be reasonably quick and cheap. For our purposes, we define this as being able to complete registration in under a minute and for less than $10. It is is also important that accounts are trustworthy and operated primarily by honest, active users. 
+The identity registry ensures secure and decentralized ownership of user accounts. Users must be able to set up a new account without any third-party approval. It should also be reasonably quick and cheap, which we define as being able to sign up in under a minute and for less than $10. The system should also ensure that most accounts are trustworthy and operated by honest, active users.
 
-Farcaster's Identity System is composed of two smart contracts - an **Account contract**, which creates new accounts, and a **Namespace contract** which issues usernames that can be used with accounts.
+Farcaster's Identity Registry comprises two smart contracts - an **AccountRegistry**, which issues new accounts, and a **NamespaceRegistry** which issues usernames for accounts.
 
-## 3.1 Account Contract
 
-An account is created by calling `register` on the contract using a user-controlled Ethereum address. A new account number is issued and linked to this address. Accounts can be transferred between addresses, though the contract ensures that an address owns no more than one account at a time. 
+## 3.1 Account Registry
 
-Account numbers start at 0 and are incremented by 1 every time a new account is registered, which is a gas efficient way to ensure unique account numbers. The account number is represented internally as a `uint256` counter and can be incremented up to ~ 10^77 which is practically infinite for our needs. 
+An account is created by calling `register` on the AccountRegistry from a user-controlled Ethereum address. The contract issues a new account number and links it to this address. Accounts can be transferred between addresses, though the AccountRegistry ensures that an address owns no more than one account at a time.
 
-## 3.2 Namespace Contract
+Account numbers start at 0 and are incremented by one every time a new account is registered, which is a gas-efficient way to ensure unique account numbers. Numbers are represented internally with a uint256 and have a practically infinite supply since they can be incremented to ~ 10^77.
 
-A Farcaster Name like `@alice` can be minted from the Namespace contract and used on the protocol. 
+## 3.2 Namespace Registry
 
-When minting a name, the contract checks that the name is unique and contains at most 16 alphanumeric characters or dashes `^[a-zA-Z0-9-]{1,16}$`. The single dash (-) username is reserved for a system account and will not be claimable. The mint happens over a two-phase commit reveal to prevent frontrunning registrations.
+A Farcaster Name like `@alice` can be minted from the NamespaceRegistry and used on the protocol. 
 
-Farcaster Names are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Farcaster Names have some properties that make them more practical. Names are cheaper to mint and can be [recovered](#recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and are easier to display because of the restricted length and character set. 
+When minting a name, the contract checks that the name is unique and contains at most 16 alphanumeric characters or dashes `^[a-zA-Z0-9-]{1,16}$`. The single dash (-) username is reserved for a system account and will not be claimable. The mint happens over a two-phase commit reveal to prevent front-running registrations.
 
-A yearly fee of 0.01 ETH is charged for owning a name, and this must be renewed yearly on Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
+Farcaster Names are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Farcaster Names have some properties that make them more practical. Names are cheaper to mint and are [recoverable](#recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and more straightforward to display because of the restricted length and character set.
 
-Names can be minted freely, but are subject to two policies enforced by governance: 
+The Namespace Registry charges a yearly fee of 0.01 ETH for owning a name, which is charged yearly on Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
 
-1. During the first year, a "prior ownership" claim can be made if the user already owns the name on at least two major social media platforms, and the current owner does not own them on any platform. 
+Names can be minted freely but are subject to two policies enforced by governance: 
 
-2. During later years, community moderators can propose an "impersonation claim" to governance vote if someone is clearly impersonating or misleading users. 
+1. A *prior ownership* claim can be made by a user who owns a name on at least two major social media platforms, if the current owner does not own the name on any major social media platforms. 
 
-Names that expire or subject to a claim are moved back into the Farcaster Treasury, which may choose to transfer ownership to someone with "prior ownership" claims or auction them to the highest bidder. For impersonation claims, any fees that were previously paid are forefit.
+2. An *impersonation claim* can be made if someone is clearly impersonating or misleading users, and it will be investigated by a group of moderators elected by the community though a governance vote.
+
+Names that expire or are subject to a claim are moved back into the Farcaster Treasury. The treasury can choose to transfer ownership to someone with ownership claims or auction them to the highest bidder. For impersonation claims, any previously paid fees are forfeit.
 
 ## 3.3 Recovery
 
-Names and Addresses can be recovered if user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within 3 days, the recovery address can complete the transfer. 
+Names and Addresses are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer. 
 
 Users can set the recovery address to another address in their wallet, a multi-sig shared with friends, or a third-party recovery service. Users can also change the recovery address at any time. Ownership remains decentralized because the recovery address cannot make a transfer that the custody address does not approve. 
 
@@ -295,7 +296,7 @@ Hub releases that include backwards incompatible changes must implement both con
 A malicious attacker can use a compromised delegate signer to impersonate the user by signing messages. As long as the user has control over a parent signer or the root signer, they can invalidate the signare and issue a new one. Unfortuantely, this means that all messages signed by that signer will be lost permanently since we cannot tell which ones were signed by the attacker. Clients can mitigate this by constantly rolling keys after every few thousand messages, which limits the scope of how many messages will be lost when a signer is reset.
 
 ## 7.2 Eclipse Attacks
-A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network. Hubs can maintain an internal score for each peer based on data availability. Periodically, they lookup the location of the user's source Hub which is published in the account contract and sync the latest messages. If their peers do not have an up-to-date copy of this, their scores are lowered until eventally the peer is dropped and a new one is selected.  
+A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network. Hubs can maintain an internal score for each peer based on data availability. Periodically, they lookup the location of the user's source Hub which is published in the AccountRegistry and sync the latest messages. If their peers do not have an up-to-date copy of this, their scores are lowered until eventally the peer is dropped and a new one is selected.  
 
 ## 7.3 Flooding Attacks 
 A flooding attack is when a malicious user keeps acquiring new accounts and broadcasting thousands of messages. Hubs may attempt to sync this data bloating their on-disk storage and causing network congestion which leads to stale data for legitimate user accounts. An account scoring system can help alleviate this by prioritizing trustworthy accounts and temporarily or permanently banning misbehaving accounts. Each Hub tracks its own score for an account which starts at zero. The score increases if the account has a valid username and a history of behaving well. It decreases when malicious behavior like flooding is obsered.
