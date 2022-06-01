@@ -31,6 +31,7 @@
     4. [DDOS Attacks](#74-ddos-attacks)
     5. [Replay Attacks](#75-replay-attacks)
 8. [URIs](#8-uris)
+9. [Governance](#9-governance)
 
 # 1. Introduction
 
@@ -45,6 +46,8 @@ Farcaster achieves sufficient decentralization through a hybrid architecture tha
 User identities are kept on-chain because they are valuable assets, and we want to leverage the security, composability and strong consistency guarantees of the Ethereum blockchain. On-chain identities are controlled by an Ethereum address, which is a public private key pair that can also sign off-chain messages.  
 
 User data cannot be practically stored on the Ethereum blockchain or any other L1 because of the strong privacy and scalability requirements. Instead users store their data off-chain on a server under their control known as a Farcaster Hub. All data must be cryptographically signed by the user's identity address before being published to the Hub. 
+
+<!-- Diagram covering the major architectural concepts  -->
 
 ## 2.1 Accounts
 
@@ -148,7 +151,7 @@ Every message type will have different rules for the merge operation. For exampl
 
 Sets ensure [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency) so that two Hubs that receive the same messages over any period will always reach the same state. This property makes Hubs highly available since they can go offline at any time and always get back into sync. Formally, Sets are anonymous Δ-state CRDTs[^delta-state], and each message is a join-irreducible update on the set. 
 
-/// Diagram of the structure of a user's sets ///
+<!-- Diagram of all user data types -->
 
 ## 4.1 Signers
 
@@ -166,9 +169,9 @@ When a Farcaster account is created its `custody address` is the only address th
 
 Delegate signers must be Ed25519 keypairs and all signatures on the Farcaster network must be signed with this scheme. The only exceptions are signer messages created by root signers, which are ECDSA secp256k1 key pairs out of necessity. If a signer is compromised, it can be revoked by itself or any of its ancestors in the tree. All messages created by the signer and its children will be discarded, because there is no way to tell the user's messages from the attackers. 
 
-/// Diagram of Signer Tree ///
+<!-- Diagram of Signer Tree -->
 
-The Signer Set is a is a modified [two-phase set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#2P-Set_(Two-Phase_Set)) with a combination of remove-wins and last-write-wins semantics.  New messages are added into the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or an ancestor. Once removed it can never be re-added, and it's child signers and messages signed by them are removed. 
+The Signer Set is a is a modified two-phase set[^two-phase-set] with a combination of remove-wins and last-write-wins semantics.  New messages are added into the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or an ancestor. Once removed it can never be re-added, and it's child signers and messages signed by them are removed. 
 
 A conflict can occur if two parents add a message with the same `publicKey` in the message. This cannot be reconciled with the tree structure since it creates ambiguity about ancestry. If seen two such messages are seen, the set keeps the one with the highest timestamp and lexicographical hash, in that order. 
 
@@ -176,24 +179,24 @@ A conflict can occur if two parents add a message with the same `publicKey` in t
 
 A Cast is a public message created by a user that is displayed on their profile.  It can contain text as well as links to media, on-chain activity or other casts. Users are allowed to delete casts at any time. 
 
-Casts are managed using a [two-phase Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#2P-Set_(Two-Phase_Set)), which has two collections: an **add set** and a **remove set**. New casts are placed in the add set and moved to the remove set when deleted by the user. Once a message is deleted, it can never be moved back into the add set. The Cast Set can be said to have "remove wins" semantics for the merge operation. 
+Casts are managed using a two phase set, which has two collections: an **add set** and a **remove set**. New casts are placed in the add set and moved to the remove set when deleted by the user. Once a message is deleted, it can never be moved back into the add set. The Cast Set can be said to have "remove wins" semantics for the merge operation. 
 
 Casts come in several different flavors and the protocol can be extended to support many more types in the future. Each type is stored in it's own two-phase set which may have additional rules for merging new messages into the set. 
 
-### 4.2.1 Short Casts
+### 4.2.1 Short Text Casts
 A short public post created by a user that can appear directly on their profile, as a reply to another cast, url or on-chain item. Short casts can have upto 280 unicode characters and two embeds. The `parentUri` property can reference any URI, except for itself or its children. 
 
 ```ts
 type CastShortTextBody = {
   embed: Embed;
   text: string;
-  schema: 'farcaster.xyz/schemas/v1/cast-new';
+  schema: 'farcaster.xyz/schemas/v1/cast-short-text';
   parentUri?: URI;
 };
 ```
 
 ### 4.2.2 Recasts
-A share is a message that can make another cast appear on the accounts's profile. The set ensures that a recast message does not reference itself, and that only one recast exists for each value of `account` and `targetCastUri`. If multiple values are discovered, it keeps the one with the highest timestamp and highest lexicographical order, in that order. 
+A recast expresses an intent to share another cast. The set ensures that a recast message does not reference itself, and that only one recast exists for each value of `account` and `targetCastUri`. If multiple values are discovered, it keeps the one with the highest timestamp and highest lexicographical order, in that order. 
 
 ```ts
 type CastRecastMessageBody = {
@@ -203,7 +206,9 @@ type CastRecastMessageBody = {
 ```
 
 ### 4.2.3 Deletes
-A delete is a message that instructs the set to remove a previously created cast. The message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents permanetly from the network, which is desirable from a user perspective. The set ensures that the delete message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. 
+A delete instructs the set to remove a previously created cast. It is a type of soft delete where the content of the message is removed but its hash is retained forever. A user who has a copy of the deleted message can prove that the message was posted at some point by the author. 
+
+The delete message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents from the network, which is desirable from a user perspective. The set ensures that the delete message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. 
 
 ```ts
 type CastDeleteBody = {
@@ -305,5 +310,22 @@ A replay attack is when a malicious actor stores a copy of a user's message and 
 
 This section is still under development and will cover a schema for URIs supported by Farcaster Message types.
 
+# 9. Governance
+
+Farcaster is a decentralized protocol that is not controlled by a single individual, and governance is the process of making protocol changes in a decentralized way. The process is kept lightweight during beta to encourage community contributions and rapid development cycles.
+
+Anyone can propose a change by opening up a [new discussion topic](https://github.com/farcasterxyz/protocol/discussions) in the protocol repository. The Farcaster team will provide feedback and and may ask for more details. Once all feedback has been provided the Farcaster team will decide whether to include the change in the roadmap or whether to reject it. Once approved, an issue is created and the specification changes are merged into this repository. 
+
+## Hub Changes
+
+Changes that involve off-chain systems must be implemented and deployed in the Hubs. The Farcaster team will work closely with Hub developers and operators to pick a release date that will ensure a smooth transition. The Farcaster team is also reponsible for ensuring that there is strong alignment around implementing the changes. 
+
+Developers and operators can veto a change if they disagree with it, but at some cost to themselves and the network. An operator may choose not to upgrade their Hub version and a developer can choose not to release the change. This will cause fragmentation and users on such Hubs may not be visible to the rest of the network. It is desirable for developers and operators to have this power to ensure decentralization of the network, but ideally they would never need to exercise it.
+
+## Contract Changes
+
+Changes that involve on-chain systems must be implemented by deploying a new contract or upgrading an existing one. The Farcaster team will implement these changes and ensure that they are thoroughly audited. Contracts will be controlled by a multi-sig whose ownership is split between members of the Farcaster team during beta. Over time, control over making contract changes will be decentralized to other parties who have a vested interested in ensuring the success of the network. 
 
 [^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163
+
+[^two-phase-set]: Shapiro, Marc; Preguiça, Nuno; Baquero, Carlos; Zawirski, Marek (2011). "A Comprehensive Study of Convergent and Commutative Replicated Data Types". Rr-7506.
