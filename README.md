@@ -13,12 +13,12 @@
     1. [Namespace Contract](#32-namespace-registry)
     3. [Recovery](#33-recovery)
 4. [Replication](#4replication)
-    1. [Signers](#41-signers)
-    2. [Casts](#42-casts)
-    3. [Actions](#43-actions)
-    4. [Verifications](#44-verifications)
-    5. [Metadata](#45-metadata)
-    6. [Root Revocations](#46-root-revocations)
+    1. [Casts](#42-casts)
+    2. [Actions](#43-actions)
+    3. [Verifications](#44-verifications)
+    4. [Metadata](#45-metadata)
+    5. [Signer Authorizations](#45-signer-authorizations)
+    6. [Root Signer Revocations](#46-root-signer-revocations)
     7. [Sharding](#47-sharding)
 5. [Peering](#5-peering)
 6. [Upgradeability](#6-upgradeability)
@@ -144,47 +144,25 @@ Transferring the asset to a new custody address must unset the recovery address.
 
 # 4. Replication
 
-Replication is the process by which Hubs accept new messages and determine a user's state. 
+*Replication* is the process by which Hubs accept new messages and determine a user's state. 
 
 Users send [messages](#41-self-authenticated-message) to a Hub for every action they take. If a user likes a URL, unlikes it, and likes it again, that creates three messages. A Hub that receives all messages will determine the current state of the URL as *liked by the user*. The Hub discards the first two messages to save space since they are no longer needed. Merging messages at the Hub level avoids client disagreements on state and saves space.
 
-Every message type will have different rules for the merge operation. For example, two likes on the same cast by the same user can be condensed into one, while two replies cannot. Hubs implement a Set for each message type, which is a [conflict-free replicated data type](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) that encodes specific validation and merge rules.
+Every message type will have different rules for the merge operation. For example, two likes on the same cast by a user can be condensed into one, while two replies cannot. Hubs implement a Set for each message type, which is a [conflict-free replicated data type](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) that encodes specific validation and merge rules.
 
 Sets ensure [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency) so that two Hubs that receive the same messages over any period will always reach the same state. This property makes Hubs highly available since they can go offline at any time and always get back into sync. Formally, Sets are anonymous Δ-state CRDTs[^delta-state], and each message is a join-irreducible update on the set. 
 
 <!-- Diagram of all user data types -->
 
-## 4.1 Signers
+## 4.1 Casts
 
-A Signer is a message that authorizes a new keypair to sign messages on behalf of an account. 
-
-```ts
-type SignerMessage = {
-  active: boolean;
-  signerPublicKey: string;
-  schema: 'farcaster.xyz/schemas/v1/signer';
-};
-```
-
-When a Farcaster account is created its `custody address` is the only address that can sign messages on its behalf. It is known as a Root Signer, and its authority can be verified on-chain. A Root Signer can authorize Delegate Signers by creating a Signer message, and Delegate Signers can authorize more Delegates. If an account moves to a new custody address, this also becomes a valid Root Signer.  Valid signers can be represented as a series of trees, where each tree's root is a historical custody address. 
-
-Delegate signers must be Ed25519 keypairs and all signatures on the Farcaster network must be signed with this scheme. The only exceptions are signer messages created by root signers, which are ECDSA secp256k1 key pairs out of necessity. If a signer is compromised, it can be revoked by itself or any of its ancestors in the tree. All messages created by the signer and its children will be discarded, because there is no way to tell the user's messages from the attackers. 
-
-<!-- Diagram of Signer Tree -->
-
-The Signer Set is a is a modified two-phase set[^two-phase-set] with a combination of remove-wins and last-write-wins semantics.  New messages are added into the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or an ancestor. Once removed it can never be re-added, and it's child signers and messages signed by them are removed. 
-
-A conflict can occur if two parents add a message with the same `publicKey` in the message. This cannot be reconciled with the tree structure since it creates ambiguity about ancestry. If seen two such messages are seen, the set keeps the one with the highest timestamp and lexicographical hash, in that order. 
-
-## 4.2 Casts
-
-A Cast is a public message created by a user that is displayed on their profile.  It can contain text as well as links to media, on-chain activity or other casts. Users are allowed to delete casts at any time. 
+A *Cast* is a public message created by a user that is displayed on their profile.  It can contain text as well as links to media, on-chain activity or other casts. Users are allowed to delete casts at any time. 
 
 Casts are managed using a two phase set, which has two collections: an **add set** and a **remove set**. New casts are placed in the add set and moved to the remove set when deleted by the user. Once a message is deleted, it can never be moved back into the add set. The Cast Set can be said to have "remove wins" semantics for the merge operation. 
 
 Casts come in several different flavors and the protocol can be extended to support many more types in the future. Each type is stored in it's own two-phase set which may have additional rules for merging new messages into the set. 
 
-### 4.2.1 Short Text Casts
+### 4.1.1 Short Text Casts
 A short public post created by a user that can appear directly on their profile, as a reply to another cast, url or on-chain item. Short casts can have upto 280 unicode characters and two embeds. The `parentUri` property can reference any URI, except for itself or its children. 
 
 ```ts
@@ -196,7 +174,7 @@ type CastShortTextBody = {
 };
 ```
 
-### 4.2.2 Recasts
+### 4.1.2 Recasts
 A recast expresses an intent to share another cast. The set ensures that a recast message does not reference itself, and that only one recast exists for each value of `account` and `targetCastUri`. If multiple values are discovered, it keeps the one with the highest timestamp and highest lexicographical order, in that order. 
 
 ```ts
@@ -206,7 +184,7 @@ type CastRecastMessageBody = {
 };
 ```
 
-### 4.2.3 Deletes
+### 4.1.3 Deletes
 A delete instructs the set to remove a previously created cast. It is a type of soft delete where the content of the message is removed but its hash is retained forever. A user who has a copy of the deleted message can prove that the message was posted at some point by the author. 
 
 The delete message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents from the network, which is desirable from a user perspective. The set ensures that the delete message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. 
@@ -218,7 +196,7 @@ type CastDeleteBody = {
 };
 ```
 
-### 4.2.4 Embeds
+### 4.1.4 Embeds
 A data structure used to embed URIs within a cast. Clients should hydrate these URIs and show an inline preview when rendering the cast in the UI. 
 
 ```ts
@@ -227,7 +205,7 @@ type Embed = {
 };
 ```
 
-## 4.3 Actions
+## 4.2 Actions
 
 An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions at any time. Conceptually, each action is an edge of the social graph of the Farcaster network.
 
@@ -242,19 +220,45 @@ type ActionMessageBody = {
 };
 ```
 
-## 4.4 Verifications
+## 4.3 Verifications
 
 This section is still in progress, and will cover a CRDT for verified data types, including proof of ownership of an address or a specific NFT.s 
 
-## 4.5 Metadata
+## 4.4 Metadata
 
 This section is still in progress, and will cover a CRDT for allowing arbitrary metdata to be added to a user's account like a display name or profile picture. 
 
-## 4.6 Root Revocations
+## 4.5 Signer Authorizations
 
-A Root Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an account. 
+A *Signer Authorization* is a message that authorizes a new key pair to generate signatures for a Farcaster account. 
 
-A revocation message must include the blockchash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid root signer. All previous custody addresses and delegate signers issued by them are invalidated.
+When an account is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the *Root Signer*, can authorize other keypairs known as *Delegate Signers*. Unlike Root Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions. 
+
+
+Root Signers generate ECDSA signatures on the secp256k1 curve and can only publish Signer Authorization messages. All other types of messages must be signed by Delegate Signers, which creates EdDSA signatures on Curve25519[^ed25519]. Delegate Signers can be used to authorize new devices or even third-party services to sign messages for an account. If a Delegate Signer is compromised, it can be revoked by itself, an ancestor in its chain of trust, or any Root Signer. When a Signer is revoked, Hubs discard all of its signed messages because there is no way to tell the user's messages from the attackers.
+
+Users might also transfer an account to a new custody address due to key recovery or changing wallets. It is usually desirable to preserve history and therefore both custody addresses become valid Root Signers. The set of valid signers for an account form a series of distinct trees. Each tree's root is a historical custody address, and the leaves are delegate signers.
+
+<!-- Diagram of Signer Tree -->
+
+
+The Signer Set is a modified two-phase set[^two-phase-set] with remove-wins and last-write-wins semantics. New messages are added to the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or by an ancestor. A Signer can never be re-added once removed, and all of its descendant children and messages are discarded.
+
+A Set conflict can occur if two valid Signers separately authorize the same Delegate Signer, which breaks the tree data structure. If this occurs, the Set retains the message with the highest timestamp and lexicographical hash, in that order.
+
+```ts
+type SignerMessage = {
+  active: boolean;
+  signerPublicKey: string;
+  schema: 'farcaster.xyz/schemas/v1/signer';
+};
+```
+
+## 4.6 Root Signer Revocations
+
+A Root Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an account. 
+
+A revocation must include the blockchash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid root signer. All previous custody addresses and delegate signers issued by them are invalidated.
 
 ```ts
 type RootRevocationBody = {
@@ -332,3 +336,6 @@ Changes that involve on-chain systems must be implemented by deploying a new con
 [^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163
 
 [^two-phase-set]: Shapiro, Marc; Preguiça, Nuno; Baquero, Carlos; Zawirski, Marek (2011). "A Comprehensive Study of Convergent and Commutative Replicated Data Types". Rr-7506.
+
+[^ed25519]: Bernstein, D.J., Duif, N., Lange, T. et al. High-speed high-security signatures. J Cryptogr Eng 2, 77–89 (2012). https://doi.org/10.1007/s13389-012-0027-1
+
