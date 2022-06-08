@@ -13,10 +13,10 @@
     1. [Namespace Contract](#32-namespace-registry)
     3. [Recovery](#33-recovery)
 4. [Replication](#4replication)
-    1. [Casts](#42-casts)
-    2. [Actions](#43-actions)
-    3. [Verifications](#44-verifications)
-    4. [Metadata](#45-metadata)
+    1. [Casts](#41-casts)
+    2. [Actions](#42-actions)
+    3. [Verifications](#43-verifications)
+    4. [Metadata](#44-metadata)
     5. [Signer Authorizations](#45-signer-authorizations)
     6. [Root Signer Revocations](#46-root-signer-revocations)
     7. [Sharding](#47-sharding)
@@ -53,20 +53,13 @@ Ethereum and other L1 blockchains cannot practically store the large volume of d
 
 A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. An individual can operate several accounts simultaneously, like a real-name account, a pseudonymous account, and a company account. 
 
-An address can mint a new account from the AccountRegistry, which issues it an account number. This address is known as the custody address, and it can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography, and verified usernames like `alice.eth`, which are all done off-chain with signed messages.
+An address can mint a new account from the AccountRegistry, which issues it an account number. This address is known as the `custody address`, and it can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography, and verified usernames like alice.eth, which are set off-chain with signed messages.
 
 ## 2.2 Signed Messages
 
-Signed Messages are objects that are **tamper-proof** and **self-authenticating**.
+Signed Messages are **tamper-proof** and **self-authenticating** objects that are signed by an account.
 
-A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed with the custody address. The **envelope** property contains this hash, signature, and the public key of the custody address. It can be used to verify the message's authenticity with the following steps: 
-
-1. Look up the custody address of the account number and verify that its public key matches the envelope's `signerPubKey`.
-2. Serialize and hash the message and verify that it matches the envelope's `hash`.
-3. Verifying the signature scheme with the envelope's `signature`, `hash`, and `signerPubKey`.
-
-The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an account number to look up the custody address on-chain and a timestamp for ordering. Timestamps are client-provided, unverified, and should be considered best-effort since they are vulnerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew) and [clock drift](https://en.wikipedia.org/wiki/Clock_drift). Users who want to ensure perfect ordering can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate timestamps.
-
+A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid keypair, like the custody address. The **envelope** is constructed with the hash, signature, and the public key of the signing key-pair. 
 ```ts
 type SignedMessage = {
   message: {
@@ -83,6 +76,35 @@ type SignedMessage = {
   }
 };
 ```
+
+The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an account number to look up the custody address on-chain and a timestamp for ordering. Timestamps are client-provided, unverified, and should be considered best-effort since they are vulnerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew) and [clock drift](https://en.wikipedia.org/wiki/Clock_drift). Users who want to ensure perfect ordering can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate timestamps.
+
+#### Ordering
+
+Signed Messages are designed to be totally ordered so that we can use ordering to resolve conflicting messages. Two messages `a` and `b` can be compared with this algorithm: 
+
+- If `a.timestamp > b.timestamp`, `a` is greater.
+- If `a.timestamp < b.timestamp`, `b` is greater
+- If `a.timestamp == b.timestamp`
+  - If `a.hash > b.hash`, `a` is greater
+  - If `a.hash < b.hash`, `b` is greater
+  - If `a.hash = b.hash`, `a == b`
+
+Timestamps are compared as numbers and hashes are compared as strings. Since string comparison can vary across implementations, we must be precise in our comparison algorithm. We say that two hashes `x` and `y` can be compared by comparing each pair of characters, starting from the first: 
+- If all character pairs are equal and `x` and `y` terminate, then `x == y`
+- If all character pairs are equal and `x` terminates first, then `y > x` 
+- If a differing character pair `xC, yC` is encountered, then `y > x` if `ASCII(yC) > ASCII(xC)`
+
+
+This type of ordering can be said to be "last write wins" with hashes used to break ties in the case of identical timestamps. Total ordering is guaranteed because two messages cannot have the same hash unless they are the exact same message.
+
+
+#### Validation
+1. `message.timestamp` is not more than 1 hour ahead of system time. 
+2. `message.account` must be a known account number in the AccountRegistry.
+3. `signerPubKey` should be a valid [Root Signer or Delegate Signer](#45-signer-authorizations) for `message.account`
+4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization. 
+5.  `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
 
 ## 2.3 Applications
 
@@ -163,7 +185,9 @@ Casts are managed using a two phase set, which has two collections: an **add set
 Casts come in several different flavors and the protocol can be extended to support many more types in the future. Each type is stored in it's own two-phase set which may have additional rules for merging new messages into the set. 
 
 ### 4.1.1 Short Text Casts
-A short public post created by a user that can appear directly on their profile, as a reply to another cast, url or on-chain item. Short casts can have upto 280 unicode characters and two embeds. The `parentUri` property can reference any URI, except for itself or its children. 
+A *Short Text Cast* is a 280 character public message created by an account.  
+
+A Short Text Cast can stand on its own or be interpreted as a reply if `parentUri` points to another cast, on-chain item or URL. When deleted, a Short Text Cast should be soft-deleted and its content removed, but its replies are still considered valid and can be displayed to the user. 
 
 ```ts
 type CastShortTextBody = {
@@ -174,30 +198,75 @@ type CastShortTextBody = {
 };
 ```
 
+Casts created by all users are partially ordered and form a series of trees where  where each root is a Cast or Farcaster URI and each node is a Cast. Every signed Cast message represents an edge that connects two nodes, or a node to a root. It is impossible for a signed Cast Message to introduce a cycle in the tree, since a parent cannot reference its child without finalizing itself first, and a child that is modified to reference another parent turns into a distinct child. 
+
+<!-- Diagram of a Set of Short Text Casts -->
+
+#### Message Validation
+1. `schema` must be known.
+2. `text` must contain <= 280 valid unicode characters,
+3. `parentUri` must be a valid Farcaster Cast URI and  must not reference this message.
+
+#### Set Construction
+Short Text Cast Sets are maintained per user and may be partially ordered if the user replies to themselves. We store them using a 2P-set, which contains an **add-set** that stores additions and a **rem-set** which stores [removes](#4). 
+
+An addition is performed by constructing a `CastShortTextBody` message `c`, and when it is received: 
+1. If there exists `r` in the rem-set such that `r.targetCastHash` equals `c.hash`, discard `c`
+2. Otherwise, add `c` into the add-set.
+
+
+A remove is performed by constructing a `CastRemove` message `c`, and when it is received:
+1. If there is an `a` in the add-set where `a.hash` equals `d.targetCastHash`, delete `a` from the add-set.
+2. If there is an `r` in the rem-set where `r.targetCastHash` equals `d.targetCastHash`
+   - If `r > d`, discard `d`
+   - If `r < d`, delete `r` and add `d` into the rem-set
+3. Otherwise, add `d` to the rem-set.
+
+
 ### 4.1.2 Recasts
-A recast expresses an intent to share another cast. The set ensures that a recast message does not reference itself, and that only one recast exists for each value of `account` and `targetCastUri`. If multiple values are discovered, it keeps the one with the highest timestamp and highest lexicographical order, in that order. 
+A *Recast* expresses an intent to share another cast. An account can recast any cast, including its own, but may not recast the same cast multiple times. 
 
 ```ts
-type CastRecastMessageBody = {
+type CastRecast = {
   targetCastUri: URI;
   schema: 'farcaster.xyz/schemas/v1/cast-recast';
-};
+}
 ```
 
-### 4.1.3 Deletes
-A delete instructs the set to remove a previously created cast. It is a type of soft delete where the content of the message is removed but its hash is retained forever. A user who has a copy of the deleted message can prove that the message was posted at some point by the author. 
+#### Message Validation
+1. `schema` must be known.
+2. `targetCastUri` must be a valid Farcaster Cast URI and must not reference this message.
 
-The delete message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents from the network, which is desirable from a user perspective. The set ensures that the delete message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. 
+#### Set Construction
+
+Recasts are partially ordered and can be stored using a 2P-Set just like Short Text Casts. However the add operation has one extra rule: 
+
+1. If there exists `a` in the add **add-set** with the same `targetCastUri` and `account` as the incoming recast, the message with the lowest timestamp and lowest lexicographical hash value is discarded.  
+
+
+### 4.1.3 Remove Messages
+A remove instructs the set to remove a previously created cast. It is a type of soft delete where the content of the message is removed but its hash is retained forever. A user who has a copy of the remove message can prove that the message was posted at some point by the author. 
 
 ```ts
-type CastDeleteBody = {
-  targetCastHash: string;
-  schema: 'farcaster.xyz/schemas/v1/cast-delete';
-};
+type CastRemove = {
+    targetCastHash: string;
+    schema: 'farcaster.xyz/schemas/v1/cast-remove';
+}
 ```
 
+The remove message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents from the network, which is desirable from a user perspective. The set ensures that the remove message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. The rules for validation are described below, but the rules for merging are specified in each set that implements the remove operation.
+
+<!-- Diagram showing the remove operations -->
+
+**Validation**
+1. `schema` must be known.
+2. `targetCastHash` must not equal the `hash` of this message.
+4. `timestamp` must be <= system clock + 1 hour
+5. `account` must be a known account number in the AccountRegistry
+
+
 ### 4.1.4 Embeds
-A data structure used to embed URIs within a cast. Clients should hydrate these URIs and show an inline preview when rendering the cast in the UI. 
+An *Embed* is a data structure that can attach Farcaster URI's to a Cast, which clients can choose to preview when displaying the message. 
 
 ```ts
 type Embed = {
@@ -205,20 +274,43 @@ type Embed = {
 };
 ```
 
+**Validation**
+1. Every item in `items` must be a valid Farcaster URI
+
+
 ## 4.2 Actions
 
-An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions at any time. Conceptually, each action is an edge of the social graph of the Farcaster network.
-
-Actions are managed with a Set that loosely resembles a [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)). Only one action in the set can have the same `type` and `targetUri`. If a second action is seen, the one with the highest timestamp is retained. If the timestamps are equal, the one with the lowest lexicographical hash order is retained.
+An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions by toggling the `active` property on the message. Conceptually, each action is an edge of the social graph of the Farcaster network.\
 
 ```ts
-type ActionMessageBody = {
-  active: boolean;
-  type: 'like' | 'follow'
-  targetUri: FarcasterURI;
-  schema: 'farcaster.xyz/schemas/v1/action';
-};
+type Action = {
+  message: {
+    body: {
+      active: boolean;
+      type: 'like' | 'follow'
+      targetUri: FarcasterURI;
+      schema: 'farcaster.xyz/schemas/v1/action';
+    }; 
+    account: number;
+    timestamp: number;
+  };
+}
 ```
+
+#### Message Validation
+1. `schema` must be known.
+2. `active`, `type` must be present and match types.
+3. `targetUri` must be a valid FarcasterURI and must not reference this message.
+
+#### Set Construction
+
+Actions are managed with an [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)) which guarantees strong eventual consistency. Conceptually, there is a single **set** which stores all messages and conflicts are resolved by timestamp and lexicographical hash order. An addition is performed by constructing an `Action` message `a` where `active` is true, while a remove is performed by setting `active` to false. In both cases, the logic for merging the message into the set is as follows: 
+
+1. If there is an `m` in the set with the same values for `type`, `targetUri` and `account`:
+   - If `m > d`, discard `a`
+   - If `m < d`, delete `m` and add `a` into the rem-set
+2. Otherwise, add `a` into the set. 
+
 
 ## 4.3 Verifications
 
@@ -234,6 +326,14 @@ A *Signer Authorization* is a message that authorizes a new key pair to generate
 
 When an account is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the *Root Signer*, can authorize other keypairs known as *Delegate Signers*. Unlike Root Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions. 
 
+```ts
+type SignerAuthorizationMessage = {
+  account: number;
+  active: boolean;
+  authorizedPublicKey: string;
+  schema: 'farcaster.xyz/schemas/v1/signer';
+};
+```
 
 Root Signers generate ECDSA signatures on the secp256k1 curve and can only publish Signer Authorization messages. All other types of messages must be signed by Delegate Signers, which creates EdDSA signatures on Curve25519[^ed25519]. Delegate Signers can be used to authorize new devices or even third-party services to sign messages for an account. If a Delegate Signer is compromised, it can be revoked by itself, an ancestor in its chain of trust, or any Root Signer. When a Signer is revoked, Hubs discard all of its signed messages because there is no way to tell the user's messages from the attackers.
 
@@ -245,14 +345,6 @@ Users might also transfer an account to a new custody address due to key recover
 The Signer Set is a modified two-phase set[^two-phase-set] with remove-wins and last-write-wins semantics. New messages are added to the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or by an ancestor. A Signer can never be re-added once removed, and all of its descendant children and messages are discarded.
 
 A Set conflict can occur if two valid Signers separately authorize the same Delegate Signer, which breaks the tree data structure. If this occurs, the Set retains the message with the highest timestamp and lexicographical hash, in that order.
-
-```ts
-type SignerMessage = {
-  active: boolean;
-  signerPublicKey: string;
-  schema: 'farcaster.xyz/schemas/v1/signer';
-};
-```
 
 ## 4.6 Root Signer Revocations
 
@@ -333,7 +425,7 @@ Changes that involve on-chain systems must be implemented by deploying a new con
 
 [^gossip-sub]: Dimitris Vyzovitis, Yusef Napora, Dirk McCormick, David Dias, Yiannis Psaras: “GossipSub: Attack-Resilient Message Propagation in the Filecoin and ETH2.0 Networks”, 2020; [http://arxiv.org/abs/2007.02754 arXiv:2007.02754].
 
-[^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163
+[^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163p
 
 [^two-phase-set]: Shapiro, Marc; Preguiça, Nuno; Baquero, Carlos; Zawirski, Marek (2011). "A Comprehensive Study of Convergent and Commutative Replicated Data Types". Rr-7506.
 
