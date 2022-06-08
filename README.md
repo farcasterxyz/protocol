@@ -37,29 +37,28 @@
 
 Social networks have become an essential part of our lives over the last decade. Many began their journey as open platforms, courting developers to build on their APIs. These developers created new clients, discovered new UI paradigms, and even launched multi-billion dollar businesses that brought in many users. However, networks have turned away from developers over the last few years. They have restricted APIs, implemented arbitrary review processes, and removed access with little notice or recourse.
 
-Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol that empowers developers to build novel social networks. We define a sufficiently decentralized network as one where two users who want to communicate are always able to, even if the network wants to prevent it. Users on such networks must have complete control over their identity (usernames), data (messages), and social graph (relationships to others). If a third party controls any of these, they can prevent two users from communicating. Developers must also be free to build applications and have unrestricted access to the network, and users must be free to switch between them. If there was only one app to connect to the network, it could prevent two users from communicating.
+Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol that empowers developers to build novel social networks. We define a sufficiently decentralized network as one where **two users who want to communicate are always able to, even if the network wants to prevent it**. Users on such networks must have complete control over their identity (usernames), data (messages), and social graph (relationships to others). If a third party controls any of these, they can prevent two users from communicating. Developers must also be free to build applications and have unrestricted access to the network, and users must be free to switch between them. If there was only one app to connect to the network, it could prevent two users from communicating.
 
 # 2. Concepts
 
 Farcaster achieves sufficient decentralization through a hybrid architecture with on-chain and off-chain components.
 
-The protocol stores user identities on  Ethereum to leverage its robust security, composability, and strong consistency guarantees. An Ethereum address controls the on-chain identity and can be used to sign off-chain messages on behalf of the identity. 
+User identities are stored on-chain in an Ethereum smart contract to leverage Ethereum's robust security, composability, and consistency guarantees. An Ethereum address controls this on-chain identity and can be used to sign off-chain messages on its behalf. 
 
-Ethereum and other L1 blockchains cannot practically store the large volume of data that users generate. Instead, users store their data off-chain on a server under their control known as a Farcaster Hub. The user's identity address must cryptographically sign all data before sending it to the Hub.
+User data is then cryptographically signed by the identity and stored off-chain on user-controlled servers called Farcaster Hubs. Data is not stored on-chain because it would be prohibitively expensive and slow to settle on most L1 and L2 networks.
 
 <!-- Diagram covering the major architectural concepts  -->
 
 ## 2.1 Accounts
 
-A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. An individual can operate several accounts simultaneously, like a real-name account, a pseudonymous account, and a company account. 
+A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. Individuals can operate several accounts simultaneously, like a real-name account and a company account. 
 
-An address can mint a new account from the AccountRegistry, which issues it an account number. This address is known as the `custody address`, and it can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography, and verified usernames like alice.eth, which are set off-chain with signed messages.
+An Ethereum address can mint a new account from the *AccountRegistry*, which issues an account number. This address is known as the `custody address`, and it can sign messages on behalf of the account. Accounts can be enriched by adding a profile picture, display name, biography, and verified usernames like alice.eth, which are set off-chain with signed messages.
 
 ## 2.2 Signed Messages
 
 Signed Messages are **tamper-proof** and **self-authenticating** objects that are signed by an account.
 
-A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid keypair, like the custody address. The **envelope** is constructed with the hash, signature, and the public key of the signing key-pair. 
 ```ts
 type SignedMessage = {
   message: {
@@ -77,34 +76,9 @@ type SignedMessage = {
 };
 ```
 
-The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an account number to look up the custody address on-chain and a timestamp for ordering. Timestamps are client-provided, unverified, and should be considered best-effort since they are vulnerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew) and [clock drift](https://en.wikipedia.org/wiki/Clock_drift). Users who want to ensure perfect ordering can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate timestamps.
+A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid keypair, like the custody address. The **envelope** contains the hash, signature, and the public key of the signing keypair, which any recipient can use to validate that the account signed the message.
 
-#### Ordering
-
-Signed Messages are designed to be totally ordered so that we can use ordering to resolve conflicting messages. Two messages `a` and `b` can be compared with this algorithm: 
-
-- If `a.timestamp > b.timestamp`, `a` is greater.
-- If `a.timestamp < b.timestamp`, `b` is greater
-- If `a.timestamp == b.timestamp`
-  - If `a.hash > b.hash`, `a` is greater
-  - If `a.hash < b.hash`, `b` is greater
-  - If `a.hash = b.hash`, `a == b`
-
-Timestamps are compared as numbers and hashes are compared as strings. Since string comparison can vary across implementations, we must be precise in our comparison algorithm. We say that two hashes `x` and `y` can be compared by comparing each pair of characters, starting from the first: 
-- If all character pairs are equal and `x` and `y` terminate, then `x == y`
-- If all character pairs are equal and `x` terminates first, then `y > x` 
-- If a differing character pair `xC, yC` is encountered, then `y > x` if `ASCII(yC) > ASCII(xC)`
-
-
-This type of ordering can be said to be "last write wins" with hashes used to break ties in the case of identical timestamps. Total ordering is guaranteed because two messages cannot have the same hash unless they are the exact same message.
-
-
-#### Validation
-1. `message.timestamp` is not more than 1 hour ahead of system time. 
-2. `message.account` must be a known account number in the AccountRegistry.
-3. `signerPubKey` should be a valid [Root Signer or Delegate Signer](#45-signer-authorizations) for `message.account`
-4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization. 
-5.  `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
+The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an account number to look up the custody address on-chain and a timestamp for ordering. 
 
 ## 2.3 Applications
 
@@ -150,9 +124,9 @@ The Namespace Registry charges a yearly fee of 0.01 ETH for owning a name, which
 
 Names can be minted freely but are subject to two policies enforced by governance: 
 
-1. A *prior ownership* claim can be made by a user who owns a name on at least two major social media platforms, if the current owner does not own the name on any major social media platforms. 
+1. A *prior ownership* claim can be made by a user who owns a name on at least two major social media platforms if the current owner does not own the name on any major social media platforms. 
 
-2. An *impersonation claim* can be made if someone is clearly impersonating or misleading users, and it will be investigated by a group of moderators elected by the community though a governance vote.
+2. An *impersonation claim* can be made if someone is impersonating or misleading users. It will be investigated by a group of moderators elected by the community through a governance vote.
 
 Names that expire or are subject to a claim are moved back into the Farcaster Treasury. The treasury can choose to transfer ownership to someone with ownership claims or auction them to the highest bidder. For impersonation claims, any previously paid fees are forfeit.
 
@@ -176,18 +150,42 @@ Sets ensure [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual
 
 <!-- Diagram of all user data types -->
 
+#### Message Ordering
+
+Sets can order Signed Messages by their timestamp to resolve conflicts with a last write wins strategy. However, they cannot guarantee perfect ordering since timestamps are vulnerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew), [clock drift](https://en.wikipedia.org/wiki/Clock_drift), and spoofing from malicious users. Users can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate perfectly ordered timestamps, but we cannot rely on this since we have no way to enforce it.
+
+Instead, we define an ordering system for messages that ensures total ordering by using timestamps to determine initial order and hashes to break conflicts. Total ordering is guaranteed because two messages cannot have the same hash unless they are the same message. Two messages `a` and `b` can be compared with this algorithm: 
+
+- If `a.timestamp > b.timestamp`, `a` is greater.
+- If `a.timestamp < b.timestamp`, `b` is greater
+- If `a.timestamp == b.timestamp`
+  - If `a.hash > b.hash`, `a` is greater
+  - If `a.hash < b.hash`, `b` is greater
+  - If `a.hash = b.hash`, `a == b`
+
+Timestamps are compared as numbers, and hashes are compared as strings. Since string comparison can vary across implementations, we must be precise in our comparison algorithm. We say that two hashes `x` and `y` can be compared by comparing each pair of characters, starting from the first: 
+- If all character pairs are equal and `x` and `y` terminate, then `x == y`
+- If all character pairs are equal and `x` terminates first, then `y > x` 
+- If a differing character pair `xC, yC` is encountered, then `y > x` if `ASCII(yC) > ASCII(xC)`
+
+
+#### Message Validation
+
+All messages must pass the following validations in addition to specific validations for the message type: 
+
+1. `message.timestamp` is not more than 1 hour ahead of system time. 
+2. `message.account` must be a known account number in the AccountRegistry.
+3. `signerPubKey` should be a valid [Root Signer or Delegate Signer](#45-signer-authorizations) for `message.account`
+4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization. 
+5.  `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
+
+
 ## 4.1 Casts
 
-A *Cast* is a public message created by a user that is displayed on their profile.  It can contain text as well as links to media, on-chain activity or other casts. Users are allowed to delete casts at any time. 
-
-Casts are managed using a two phase set, which has two collections: an **add set** and a **remove set**. New casts are placed in the add set and moved to the remove set when deleted by the user. Once a message is deleted, it can never be moved back into the add set. The Cast Set can be said to have "remove wins" semantics for the merge operation. 
-
-Casts come in several different flavors and the protocol can be extended to support many more types in the future. Each type is stored in it's own two-phase set which may have additional rules for merging new messages into the set. 
+A *Cast* is a public message created by a user that is displayed on their profile.  It can contain text and links to media, on-chain activity or other casts. Users are allowed to delete casts at any time. Casts come in several different flavors and the protocol can be extended to support many more types in the future. Each type has its own replication mechanisms which are defined below. 
 
 ### 4.1.1 Short Text Casts
-A *Short Text Cast* is a 280 character public message created by an account.  
-
-A Short Text Cast can stand on its own or be interpreted as a reply if `parentUri` points to another cast, on-chain item or URL. When deleted, a Short Text Cast should be soft-deleted and its content removed, but its replies are still considered valid and can be displayed to the user. 
+A *Short Text Cast* is a 280 character public message created by an account. It can stand on its own or as a reply if `parentUri` points to another cast, on-chain item or URL. When deleted, a Short Text Cast should be soft-deleted and its content removed, but its replies are still considered valid and can be displayed to the user. 
 
 ```ts
 type CastShortTextBody = {
@@ -198,7 +196,7 @@ type CastShortTextBody = {
 };
 ```
 
-Casts created by all users are partially ordered and form a series of trees where  where each root is a Cast or Farcaster URI and each node is a Cast. Every signed Cast message represents an edge that connects two nodes, or a node to a root. It is impossible for a signed Cast Message to introduce a cycle in the tree, since a parent cannot reference its child without finalizing itself first, and a child that is modified to reference another parent turns into a distinct child. 
+Short Text Casts can be represented as a series of trees, where each root is a Cast or URI, and each node is a Cast. This is a useful property for threading, since there is a determinstic order to how messages should be displayed in the UI during a back and forth conversation. It is impossible to break such a tree by introducing a cycle because of the requirement that every node must be hashed and signed before a child can reference it. If the parent or child attempts to change their `parentUri` after finalization, their hash changes making them a distinct node in the tree.
 
 <!-- Diagram of a Set of Short Text Casts -->
 
@@ -208,15 +206,14 @@ Casts created by all users are partially ordered and form a series of trees wher
 3. `parentUri` must be a valid Farcaster Cast URI and  must not reference this message.
 
 #### Set Construction
-Short Text Cast Sets are maintained per user and may be partially ordered if the user replies to themselves. We store them using a 2P-set, which contains an **add-set** that stores additions and a **rem-set** which stores [removes](#4). 
+Short Text Casts for a user are stored in a two-phase set CRDT[^two-phase-set], wwhich contains an **add-set** that stores additions and a **rem-set** which stores [removes](#4). An addition is performed with a `CastShortTextBody` message, while a remove is performed with a `CastRemove`.
 
-An addition is performed by constructing a `CastShortTextBody` message `c`, and when it is received: 
+When an addition message `c` is received: 
 1. If there exists `r` in the rem-set such that `r.targetCastHash` equals `c.hash`, discard `c`
 2. Otherwise, add `c` into the add-set.
 
-
-A remove is performed by constructing a `CastRemove` message `c`, and when it is received:
-1. If there is an `a` in the add-set where `a.hash` equals `d.targetCastHash`, delete `a` from the add-set.
+When a remove message `r` is received:
+1. If there is an `a` in the add-set where `a.hash` equals `d.targetCastHash`, delete it.
 2. If there is an `r` in the rem-set where `r.targetCastHash` equals `d.targetCastHash`
    - If `r > d`, discard `d`
    - If `r < d`, delete `r` and add `d` into the rem-set
@@ -239,9 +236,11 @@ type CastRecast = {
 
 #### Set Construction
 
-Recasts are partially ordered and can be stored using a 2P-Set just like Short Text Casts. However the add operation has one extra rule: 
+Recasts can be stored using a two-phase set just like Short Text Casts. The remove operation is identical, while the addition operation is performed with `CastRecast`, and has one additional rule: 
 
-1. If there exists `a` in the add **add-set** with the same `targetCastUri` and `account` as the incoming recast, the message with the lowest timestamp and lowest lexicographical hash value is discarded.  
+1. If there is a CastRecast `a` in the add **add-set** with the same `targetCastUri` and `account` as the incoming CastRecast `rc`: 
+   - If `a > rc`, discard `d`
+   - If `a < rc`, delete `a` and add `rc` into the rem-set
 
 
 ### 4.1.3 Remove Messages
@@ -280,7 +279,7 @@ type Embed = {
 
 ## 4.2 Actions
 
-An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions by toggling the `active` property on the message. Conceptually, each action is an edge of the social graph of the Farcaster network.\
+An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions by toggling the `active` property on the message. Conceptually, each action is an edge of the social graph of the Farcaster network.
 
 ```ts
 type Action = {
@@ -304,7 +303,7 @@ type Action = {
 
 #### Set Construction
 
-Actions are managed with an [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)) which guarantees strong eventual consistency. Conceptually, there is a single **set** which stores all messages and conflicts are resolved by timestamp and lexicographical hash order. An addition is performed by constructing an `Action` message `a` where `active` is true, while a remove is performed by setting `active` to false. In both cases, the logic for merging the message into the set is as follows: 
+Actions are managed with an [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)) which guarantees strong eventual consistency. Conceptually, there is a single **set** that stores all messages and conflicts are resolved by timestamp and lexicographical hash order. An addition is performed by constructing an `Action` message `a` where `active` is true, while a remove is performed by setting `active` to false. In both cases, the logic for merging the message into the set is as follows: 
 
 1. If there is an `m` in the set with the same values for `type`, `targetUri` and `account`:
    - If `m > d`, discard `a`
@@ -313,14 +312,15 @@ Actions are managed with an [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki
 
 
 ## 4.3 Verifications
-
-This section is still in progress, and will cover a CRDT for verified data types, including proof of ownership of an address or a specific NFT.s 
+*This section is still under development and will cover a CRDT for verified data types, including proof of ownership of an address or a specific NFTs*
 
 ## 4.4 Metadata
+*This section is still under development and will cover a CRDT for allowing arbitrary metdata to be added to a user's account like a display name or profile picture.*
 
-This section is still in progress, and will cover a CRDT for allowing arbitrary metdata to be added to a user's account like a display name or profile picture. 
 
 ## 4.5 Signer Authorizations
+*This section is still under development.*
+
 
 A *Signer Authorization* is a message that authorizes a new key pair to generate signatures for a Farcaster account. 
 
@@ -342,11 +342,12 @@ Users might also transfer an account to a new custody address due to key recover
 <!-- Diagram of Signer Tree -->
 
 
-The Signer Set is a modified two-phase set[^two-phase-set] with remove-wins and last-write-wins semantics. New messages are added to the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or by an ancestor. A Signer can never be re-added once removed, and all of its descendant children and messages are discarded.
+The Signer Set is a modified two-phase set with remove-wins and last-write-wins semantics. New messages are added to the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or by an ancestor. A Signer can never be re-added once removed, and all of its descendant children and messages are discarded.
 
 A Set conflict can occur if two valid Signers separately authorize the same Delegate Signer, which breaks the tree data structure. If this occurs, the Set retains the message with the highest timestamp and lexicographical hash, in that order.
 
 ## 4.6 Root Signer Revocations
+  *This section is still under development.*
 
 A Root Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an account. 
 
@@ -358,6 +359,7 @@ type RootRevocationBody = {
   schema: 'farcaster.xyz/schemas/v1/root-revocation';
 }
 ```
+
 
 ## 4.7 Sharding
 
@@ -389,16 +391,16 @@ Hub releases that include backwards incompatible changes must implement both con
 
 ## 7.1 Signer Compromise
 
-A malicious attacker can use a compromised delegate signer to impersonate the user by signing messages. As long as the user has control over a parent signer or the root signer, they can invalidate the signare and issue a new one. Unfortuantely, this means that all messages signed by that signer will be lost permanently since we cannot tell which ones were signed by the attacker. Clients can mitigate this by constantly rolling keys after every few thousand messages, which limits the scope of how many messages will be lost when a signer is reset.
+A malicious attacker can use a compromised delegate signer to impersonate the user by signing messages. As long as the user has control over a parent signer or the root signer, they can invalidate the signare and issue a new one. Unfortunately, this means that all messages signed by that signer will be lost since we cannot tell which ones were signed by the attacker. Clients can mitigate this by constantly rolling keys after every few thousand messages, which limits the scope of how many messages will be lost when a signer is reset.
 
 ## 7.2 Eclipse Attacks
-A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network. Hubs can maintain an internal score for each peer based on data availability. Periodically, they lookup the location of the user's source Hub which is published in the AccountRegistry and sync the latest messages. If their peers do not have an up-to-date copy of this, their scores are lowered until eventally the peer is dropped and a new one is selected.  
+A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network. Hubs can maintain an internal score for each peer based on data availability. Periodically, they lookup the location of the user's source Hub which is published in the AccountRegistry and sync the latest messages. If their peers do not have an up-to-date copy of this, their scores are lowered until eventually the peer is dropped and a new one is selected.  
 
 ## 7.3 Flooding Attacks 
-A flooding attack is when a malicious user keeps acquiring new accounts and broadcasting thousands of messages. Hubs may attempt to sync this data bloating their on-disk storage and causing network congestion which leads to stale data for legitimate user accounts. An account scoring system can help alleviate this by prioritizing trustworthy accounts and temporarily or permanently banning misbehaving accounts. Each Hub tracks its own score for an account which starts at zero. The score increases if the account has a valid username and a history of behaving well. It decreases when malicious behavior like flooding is obsered.
+A flooding attack is when a malicious user keeps acquiring new accounts and broadcasting thousands of messages. Hubs may attempt to sync this data bloating their on-disk storage and causing network congestion which leads to stale data for legitimate user accounts. An account scoring system can help alleviate this by prioritizing trustworthy accounts and temporarily or permanently banning misbehaving accounts. Each Hub tracks its own score for an account which starts at zero. The score increases if the account has a valid username and a history of behaving well. It decreases when malicious behavior like flooding is observed.
 
 ## 7.4 DDOS Attacks
-A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitiamate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require aggressive mitigations like whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.  
+A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitimate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require aggressive mitigations like whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.  
 
 ## 7.5 Replay Attacks
 A replay attack is when a malicious actor stores a copy of a user's message and is able to replay it to cause an action that the user did not intend. This attack is possible if a Signer is removed, since it may delete a message that causally removed a prior message from the state. Assume Alice added a "hello world" cast with Signer A and then deleted it with Signer B and then proceeded to delete Signer B. At this point, the cast is no longer present on the Hub but neither is the delete message. A malicious user with a copy of the "hello world" cast could replay it causing it to be accepted as valid. Fortunately, the attack is restricted to replaying previously valid messages and  Alice can issue a remove message from a currently valid signer to nullify it. 
@@ -411,17 +413,17 @@ This section is still under development and will cover a schema for URIs support
 
 Farcaster is a decentralized protocol that is not controlled by a single individual, and governance is the process of making protocol changes in a decentralized way. The process is kept lightweight during beta to encourage community contributions and rapid development cycles.
 
-Anyone can propose a change by opening up a [new discussion topic](https://github.com/farcasterxyz/protocol/discussions) in the protocol repository. The Farcaster team will provide feedback and and may ask for more details. Once all feedback has been provided the Farcaster team will decide whether to include the change in the roadmap or whether to reject it. Once approved, an issue is created and the specification changes are merged into this repository. 
+Anyone can propose a change by opening up a [new discussion topic](https://github.com/farcasterxyz/protocol/discussions) in the protocol repository. The Farcaster team will provide feedback and may ask for more details. Once all feedback has been provided the Farcaster team will decide whether to include the change in the roadmap or whether to reject it. Once approved, an issue is created and the specification changes are merged into this repository. 
 
 ## Hub Changes
 
-Changes that involve off-chain systems must be implemented and deployed in the Hubs. The Farcaster team will work closely with Hub developers and operators to pick a release date that will ensure a smooth transition. The Farcaster team is also reponsible for ensuring that there is strong alignment around implementing the changes. 
+Changes that involve off-chain systems must be implemented and deployed in the Hubs. The Farcaster team will work closely with Hub developers and operators to pick a release date that will ensure a smooth transition. The Farcaster team is also responsible for ensuring that there is strong alignment around implementing the changes. 
 
 Developers and operators can veto a change if they disagree with it, but at some cost to themselves and the network. An operator may choose not to upgrade their Hub version and a developer can choose not to release the change. This will cause fragmentation and users on such Hubs may not be visible to the rest of the network. It is desirable for developers and operators to have this power to ensure decentralization of the network, but ideally they would never need to exercise it.
 
 ## Contract Changes
 
-Changes that involve on-chain systems must be implemented by deploying a new contract or upgrading an existing one. The Farcaster team will implement these changes and ensure that they are thoroughly audited. Contracts will be controlled by a multi-sig whose ownership is split between members of the Farcaster team during beta. Over time, control over making contract changes will be decentralized to other parties who have a vested interested in ensuring the success of the network. 
+Changes that involve on-chain systems must be implemented by deploying a new contract or upgrading an existing one. The Farcaster team will implement these changes and ensure that they are thoroughly audited. Contracts will be controlled by a multi-sig whose ownership is split between members of the Farcaster team during beta. Over time, control over making contract changes will be decentralized to other parties who have a vested interest in ensuring the success of the network. 
 
 [^gossip-sub]: Dimitris Vyzovitis, Yusef Napora, Dirk McCormick, David Dias, Yiannis Psaras: “GossipSub: Attack-Resilient Message Propagation in the Filecoin and ETH2.0 Networks”, 2020; [http://arxiv.org/abs/2007.02754 arXiv:2007.02754].
 
