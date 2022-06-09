@@ -142,17 +142,17 @@ Transferring the asset to a new custody address must unset the recovery address.
 
 *Replication* is the process by which Hubs accept new messages and determine a user's state. 
 
-Users send [messages](#41-self-authenticated-message) to a Hub for every action they take. If a user likes a URL, unlikes it, and likes it again, that creates three messages. A Hub that receives all messages will determine the current state of the URL as *liked by the user*. The Hub discards the first two messages to save space since they are no longer needed. Merging messages at the Hub level avoids client disagreements on state and saves space.
+Users send [messages](#22-signed-messages) to a Hub for every action they take. If a user likes a URL, unlikes it, and likes it again, that creates three messages. A Hub that receives all messages will determine the current state of the URL as *liked by the user*. The Hub can discard the first two messages to save space since they are no longer needed. Hubs may condense messages like this using a merge operation, which avoids client-level disagreement and saves space. Messages may have different rules for their merge operations. For example, two likes on the same cast by a user can be condensed into one, while two replies cannot. 
 
-Every message type will have different rules for the merge operation. For example, two likes on the same cast by a user can be condensed into one, while two replies cannot. Hubs implement a Set for each message type, which is a [conflict-free replicated data type](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) that encodes specific validation and merge rules.
+A Hub may fail to receive some messages from a user and end up in a partial state. For instance, it may just get the first like and the unlike which sets the current state to *not liked by the user*. The merge operation should allow such partial merges to move the state forward and reach consistency when the missing messages are re-broadcast. In other words, the merge should ensure [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency). 
 
-Sets ensure [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency) so that two Hubs that receive the same messages over any period will always reach the same state. This property makes Hubs highly available since they can go offline at any time and always get back into sync. Formally, Sets are anonymous Δ-state CRDTs[^delta-state], and each message is a join-irreducible update on the set. 
+Hubs achieve this by implementing a CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) Set for each message type which encodes specific validation and merge rules. This property makes Hubs highly available since they can go offline at any time and always get back into sync. Formally, our CRDT sets are anonymous Δ-state CRDTs[^delta-state], and each message is a join-irreducible update on the set. 
 
 <!-- Diagram of all user data types -->
 
 #### Message Ordering
 
-Sets can order Signed Messages by their timestamp to resolve conflicts with a last write wins strategy. However, they cannot guarantee perfect ordering since timestamps are vulnerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew), [clock drift](https://en.wikipedia.org/wiki/Clock_drift), and spoofing from malicious users. Users can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate perfectly ordered timestamps, but we cannot rely on this since we have no way to enforce it.
+Sets can order Signed Messages by their timestamp to resolve merge conflicts with a last write wins strategy. However, they cannot guarantee perfect ordering since timestamps are vulnerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew), [clock drift](https://en.wikipedia.org/wiki/Clock_drift), spoofing from malicious users and may collide for valid reasons. Applications can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate perfectly ordered timestamps that do not collide, but we cannot enforce their usage.
 
 Instead, we define an ordering system for messages that ensures total ordering by using timestamps to determine initial order and hashes to break conflicts. Total ordering is guaranteed because two messages cannot have the same hash unless they are the same message. Two messages `a` and `b` can be compared with this algorithm: 
 
@@ -279,7 +279,7 @@ type Embed = {
 
 ## 4.2 Actions
 
-An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions by toggling the `active` property on the message. Conceptually, each action is an edge of the social graph of the Farcaster network.
+An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions by toggling the `active` property on the message. Conceptually, each action is an edge in a social graph.
 
 ```ts
 type Action = {
@@ -303,12 +303,12 @@ type Action = {
 
 #### Set Construction
 
-Actions are managed with an [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)) which guarantees strong eventual consistency. Conceptually, there is a single **set** that stores all messages and conflicts are resolved by timestamp and lexicographical hash order. An addition is performed by constructing an `Action` message `a` where `active` is true, while a remove is performed by setting `active` to false. In both cases, the logic for merging the message into the set is as follows: 
+Actions are managed with an [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)) which guarantees strong eventual consistency. Conceptually, there is a single **set** that stores all messages and conflicts are resolved by timestamp and lexicographical hash order. An addition is performed by constructing an `Action` message `a` where `active` is true, while a remove is performed by setting `active` to false. In both cases, the logic for merging the message into the set is: 
 
-1. If there is an `m` in the set with the same values for `type`, `targetUri` and `account`:
-   - If `m > d`, discard `a`
-   - If `m < d`, delete `m` and add `a` into the rem-set
-2. Otherwise, add `a` into the set. 
+1. If there is an action `x` in the set with the same values for `type`, `targetUri` and `account` as the incoming action `y`:
+   - If `x > y`, discard `y`
+   - If `x < y`, delete `x` and add `y` into the set
+2. Otherwise, add `y` into the set. 
 
 
 ## 4.3 Verifications
