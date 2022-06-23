@@ -84,9 +84,9 @@ The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/
 
 An *application* is a program that people use to interact with the Farcaster network. Users can choose the type of application that best suits their needs and switch between them at any time. 
 
-A simple application might consist of a standalone desktop or mobile client that talks directly to a Farcaster Hub. It can publish new messages and view messages published by other accounts. Such applications are **self-hosted** and must be instantiated with the custody address or [valid signing key](#42-signer).
+A simple application might consist of a standalone desktop or mobile client that talks directly to a Farcaster Hub. It can publish new messages and view messages published by other accounts. Such applications are **self-hosted** and must be instantiated with the custody address or [valid signing key](#45-signer-authorizations).
 
-A more sophisticated application might add a proxy backend server that indexes data from Hubs. Indexing allows servers to implement features like search, algorithmic feeds, and spam detection that are difficult or expensive to perform on the Hub. Such applications can be **self-hosted** by storing keys on the client; **delegated** by asking users for a [delegate signing key](#42-signer); or **hosted** by managing all keys including the custody address.
+A more sophisticated application might add a proxy backend server that indexes data from Hubs. Indexing allows servers to implement features like search, algorithmic feeds, and spam detection that are difficult or expensive to perform on the Hub. Such applications can be **self-hosted** by storing keys on the client; **delegated** by asking users for a [delegate signing key](#45-signer-authorizations); or **hosted** by managing all keys including the custody address.
 
 ## 2.4 Hubs
 A Hub is an always-on server that validates, stores, and replicates Signed Messages. 
