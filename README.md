@@ -312,7 +312,68 @@ Actions are managed with an [LWW-Element-Set CRDT](https://en.wikipedia.org/wiki
 
 
 ## 4.3 Verifications
-*This section is still under development and will cover a CRDT for verified data types, including proof of ownership of an address or a specific NFTs*
+
+Verifications are mutual proofs of ownership between Farcaster accounts and external identities. Initially, Ethereum addresses are the only supported external identities, though other blockchains can be added later.
+
+Verifications must be opted in to by both the external identity and the Farcaster account. The mutual opt-in is implemented in two steps:
+
+1. Create a `VerificationClaim` object that contains the external address and the Farcaster account. Have the external identity sign a hash of the claim object.
+2. Create a `VerificationAdd` message with the external address and signature and have the Farcaster account sign the message and share it with the network.
+
+Farcaster hubs validate both the Farcaster signature as well as the external identity's signature. Here are the schemas for `VerificationClaim` and `VerificationAdd`:
+
+```ts
+type VerificationClaim = {
+  externalAddressUri: string;
+  account: number;
+}
+
+type VerificationAdd = {
+  message: {
+    body: {
+      externalAddressUri: string;
+      claimHash: string;
+      externalSignature: string;
+      externalSignatureType: 'secp256k1-eip-191'
+      schema: 'farcaster.xyz/schemas/v1/verification-add';
+    }
+    account: number;
+    timestamp: number;
+  };
+  envelope: {
+    hash: string;
+    hashType: 'BLAKE2b';
+    signature: string;
+    signatureType: 'ed25519' | 'ecdsa-secp256k1';
+    signerPubKey: string;
+  }
+};
+```
+
+Verifications are stored using a modified [Two-Phase Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#2P-Set_(Two-Phase_Set)) with some special logic to handle deletes and conflicts. Valid and un-deleted `VerificationAdd` messages are stored in the `add-set`.
+
+Verifications can be deleted by sending a valid `VerificationRemove` message to the network that references the original `VerificationAdd` by its hash.
+```ts
+type VerificationRemove = {
+  message: {
+    body: {
+      verificationAddHash: string;
+      schema: 'farcaster.xyz/schemas/v1/verification-remove';
+    }
+    account: number;
+  };
+  envelope: {
+    hash: string;
+    hashType: 'BLAKE2b';
+    signature: string;
+    signatureType: 'ed25519' | 'ecdsa-secp256k1';
+    signerPubKey: string;
+  }
+};
+```
+A valid `VerificationRemove` message is stored in the `rem-set` and deletes the `VerificationAdd` message from the `add-set`.
+
+If a `VerificationAdd` message is received whose hash already matches a `VerificationRemove` message in the `rem-set`, the new message is discarded. Therefore, a verification between a Farcaster account and an external identity can only be re-added to the network once it is deleted via a new `VerificationAdd` with a new hash (likely due to a new timestamp).
 
 ## 4.4 Metadata
 *This section is still under development and will cover a CRDT for allowing arbitrary metdata to be added to a user's account like a display name or profile picture.*
