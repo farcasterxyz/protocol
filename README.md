@@ -103,7 +103,7 @@ Conceptually, Hubs form an **L2 network for storing social data**, though the ne
 
 The identity registry ensures secure and decentralized ownership of user accounts. Users must be able to set up a new account without any third-party approval. It should also be reasonably quick and cheap, which we define as being able to sign up in under a minute and for less than $10. The system should also ensure that most accounts are trustworthy and operated by honest, active users.
 
-Farcaster's Identity Registry comprises two smart contracts - an **AccountRegistry**, which issues new accounts, and a **NamespaceRegistry** which issues usernames for accounts.
+Farcaster's Identity Registry comprises two smart contracts - an **AccountRegistry**, which issues new accounts, and a **NamespaceRegistry** which issues account usernames.
 
 
 ## 3.1 Account Registry
