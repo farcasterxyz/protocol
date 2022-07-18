@@ -363,9 +363,9 @@ type RootRevocationBody = {
 
 ## 4.7 Sharding
 
-Hubs can replicate data for specific accounts only, which is a useful property for scaling the network. If Farcaster grows large enough that a single server cannot support a Hub that replicates the entire network, the workload can be sharded across multiple Hubs. Hub operators can also avoid syncing data for users who are behaving maliciously or not relevant to the operator.
+Hubs can replicate data for specific accounts only, which is a useful property for scaling the network. If Farcaster grows large enough that a single server cannot support a Hub replicating the entire network, the workload can be shared across multiple Hubs. Hub operators can also avoid syncing data for users who are behaving maliciously or are not relevant to the operator.
 
-Selective replication only provides a partial view of the network. If a Hub is syncing Alice's data it will become aware that she replied and liked one of Bob's posts. However, it will not know the contents of Bob's post, or the fact that Bob liked her reply and then proceeded to reply to it. An application that seeks to provide accurate like counts and serve up all the replies to a message should replicate as many users as possible.
+Selective replication only provides a partial view of the network. If a Hub is syncing Alice's data it will become aware that she replied and liked one of Bob's posts. However, it will not know the contents of Bob's post or the fact that Bob liked her reply and then proceeded to reply. An application that seeks to provide accurate like counts and serve up all the response to a message should replicate as many users as possible.
 
 # 5. Peering
 
