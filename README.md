@@ -343,7 +343,7 @@ type VerificationAddBody = {
   externalAddressUri: string;
   claimHash: string;
   externalSignature: string;
-  externalSignatureType: 'eip-191-0x45';
+  externalSignatureType: 'eip-191-0x45'; // Will support other types over time
   schema: 'farcaster.xyz/schemas/v1/verification-add';
 };
 
@@ -353,15 +353,29 @@ type VerificationRemoveBody = {
 };
 ```
 
-Notice how `VerificationAddBody` does not include the full claim object. The `VerificationClaim` can be reconstructed from the `externalAddressUri` and `account` attributes of the add message, so we exclude the claim to save space.
+Notice how `VerificationAddBody` does not include the full claim object, because the claim can be reconstructed from the `externalAddressUri` and `account` attributes of the add message.
 
-Each type of verification has its own message validation mechanism. These are defined below in the subsections.
+#### Message Validation
+
+The `envelope` of `VerificationAdd` and `VerificationRemove` messages is validated the [same as other message types](#message-validation).
+
+Here are rules for `VerificationAdd` messages:
+
+1. `schema` must be known
+2. `claimHash` must be present and match `hashFn(claim)`
+3. `externalSignatureType` must be known
+4. `externalSignature` must be valid according to custom rules depending on `externalSignatureType`, which are defined in subsections below
+
+Here are rules for `VerificationRemove` messages:
+
+1. `schema` must be known
+2. `claimHash` must be present
 
 #### Set Construction
 
 Verifications are stored in the Verifications Set, which is a modified [Last-Write-Wins-Element Set](<https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)>). Valid and unremoved verifications are stored as `VerificationAdd` messages in the `adds` set. Removed verifications are stored as `VerificationRemove` messages in the `removes` set. Messages are indexed by `claimHash` and a particular claim cannot exist in both sets simultaneously.
 
-Verifications can be re-added once they've been removed, and conflicts are resolved using timestamp. The external entities associated with verifications are effectively hidden once they are removed, because the `VerificationRemove` message only contains the claim hash.
+Verifications can be re-added once they've been removed, and conflicts are resolved using timestamp. Verification information like the external entity address is effectively hidden once a verification is removed, because the `VerificationRemove` message only contains the claim hash.
 
 When a verification add message `a` is received:
 
@@ -385,29 +399,17 @@ When a verification remove message `b` is received:
 3. If `b` does not exist in either set
    1. Add `b` to `removes` set
 
-Each type of verification has its own message validation mechanism which are defined below.
-
 ### 4.3.1 Ethereum address verifications
 
-The first type of verification supported is a self-authenticating proof of ownership of an Ethereum address. The bi-directional proof is created in three steps:
+The first type of verification supported is a self-authenticating proof of ownership of an Ethereum address. The `externalSignatureType` attribute for Ethereum address verifications is `eip-191-0x45`.
 
-1. Create a `VerificationClaim` object containing the Farcaster account and Ethereum address and hash the claim to create a unique claim identifier.
+The bi-directional proof is created in three steps:
+
+1. Create a `VerificationClaim` object containing the Farcaster account and Ethereum address and hash the claim to create a unique claim hash.
 2. Have the Ethereum address sign the claim hash according to [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) (i.e. Ethereum's `personal_sign`).
 3. Create a `VerificationAdd` message containing the Ethereum address, claim hash, and signature and have the Farcaster account sign it like other messages.
 
-#### Message Validation
-
-The `envelope` of `VerificationAdd` and `VerificationRemove` messages is validated the same as other message types. Here are unique rules for `VerificationAdd` messages:
-
-1. `schema` must be known
-2. `claimHash` must be present and match `hashFn(claim)`
-3. `externalSignatureType` must be known
-4. `externalSignature` must be a valid [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature of the `claimHash` by `externalAddressUri`
-
-Here are rules for `VerificationRemove` messages:
-
-1. `schema` must be known
-2. `claimHash` must be present
+The `externalSignature` for an Ethereum address verification must be a valid [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature of the `claimHash` by `externalAddressUri`.
 
 ## 4.4 Metadata
 
