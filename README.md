@@ -68,9 +68,9 @@ type SignedMessage = {
   };
   envelope: {
     hash: string;
-    hashType: "BLAKE2b";
+    hashType: 'BLAKE2b';
     signature: string;
-    signatureType: "ed25519" | "ecdsa-secp256k1";
+    signatureType: 'ed25519' | 'ecdsa-secp256k1';
     signerPubKey: string;
   };
 };
@@ -191,7 +191,7 @@ A _Short Text Cast_ is a 280 character public message created by an account. It 
 type CastShortTextBody = {
   embed: Embed;
   text: string;
-  schema: "farcaster.xyz/schemas/v1/cast-short-text";
+  schema: 'farcaster.xyz/schemas/v1/cast-short-text';
   parentUri?: URI;
 };
 ```
@@ -230,7 +230,7 @@ A _Recast_ expresses an intent to share another cast. An account can recast any 
 ```ts
 type CastRecast = {
   targetCastUri: URI;
-  schema: "farcaster.xyz/schemas/v1/cast-recast";
+  schema: 'farcaster.xyz/schemas/v1/cast-recast';
 };
 ```
 
@@ -254,7 +254,7 @@ A remove instructs the set to remove a previously created cast. It is a type of 
 ```ts
 type CastRemove = {
   targetCastHash: string;
-  schema: "farcaster.xyz/schemas/v1/cast-remove";
+  schema: 'farcaster.xyz/schemas/v1/cast-remove';
 };
 ```
 
@@ -292,9 +292,9 @@ type Action = {
   message: {
     body: {
       active: boolean;
-      type: "like" | "follow";
+      type: 'like' | 'follow';
       targetUri: FarcasterURI;
-      schema: "farcaster.xyz/schemas/v1/action";
+      schema: 'farcaster.xyz/schemas/v1/action';
     };
     account: number;
     timestamp: number;
@@ -342,17 +342,17 @@ type VerificationAdd = {
       externalAddressUri: string;
       claimHash: string;
       externalSignature: string;
-      externalSignatureType: "eip-191-0x45";
-      schema: "farcaster.xyz/schemas/v1/verification-add";
+      externalSignatureType: 'eip-191-0x45';
+      schema: 'farcaster.xyz/schemas/v1/verification-add';
     };
     account: number;
     timestamp: number;
   };
   envelope: {
     hash: string;
-    hashType: "BLAKE2b";
+    hashType: 'BLAKE2b';
     signature: string;
-    signatureType: "ed25519" | "ecdsa-secp256k1";
+    signatureType: 'ed25519' | 'ecdsa-secp256k1';
     signerPubKey: string;
   };
 };
@@ -367,16 +367,16 @@ type VerificationRemove = {
   message: {
     body: {
       claimHash: string;
-      schema: "farcaster.xyz/schemas/v1/verification-remove";
+      schema: 'farcaster.xyz/schemas/v1/verification-remove';
     };
     account: number;
     timestamp: number;
   };
   envelope: {
     hash: string;
-    hashType: "BLAKE2b";
+    hashType: 'BLAKE2b';
     signature: string;
-    signatureType: "ed25519" | "ecdsa-secp256k1";
+    signatureType: 'ed25519' | 'ecdsa-secp256k1';
     signerPubKey: string;
   };
 };
@@ -454,7 +454,7 @@ type SignerAuthorizationMessage = {
   account: number;
   active: boolean;
   authorizedPublicKey: string;
-  schema: "farcaster.xyz/schemas/v1/signer";
+  schema: 'farcaster.xyz/schemas/v1/signer';
 };
 ```
 
@@ -479,7 +479,7 @@ A revocation must include the blockchash of a specific Ethereum block. It must b
 ```ts
 type RootRevocationBody = {
   blockHash: string;
-  schema: "farcaster.xyz/schemas/v1/root-revocation";
+  schema: 'farcaster.xyz/schemas/v1/root-revocation';
 };
 ```
 
