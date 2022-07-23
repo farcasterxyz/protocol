@@ -397,16 +397,10 @@ The first type of verification supported is a self-authenticating proof of owner
 
 #### Message Validation
 
-All `VerificationAdd` messages contain `externalAddressUri`, so a client can iterate through the `VerificationAdd` messages in the `adds` set to get all verified external identities. The `VerificationRemove` message schema only has `claimHash`, so the external identity is effectively hidden once the verification is removed.
-
-If a `VerificationAdd` or `VerificationRemove` message is received that matches a `claimHash` already in the `adds` or `removes` set, the message with a later timestamp wins. For example, if a `VerificationAdd` message is received whose `claimHash` matches one already in the `removes` set, and the timestamp of the `VerificationAdd` message is more recent than the `VerificationRemove` message in the `removes` set, then the `claimHash` is moved from the `removes` set to the `adds` set. Therefore, a verification between a Farcaster account and a particular external identity can be re-added if it was previously removed via a new `VerificationAdd` message.
-
-#### Message validation
-
 The `envelope` of `VerificationAdd` and `VerificationRemove` messages is validated the same as other message types. Here are unique rules for `VerificationAdd` messages:
 
 1. `schema` must be known
-2. `claimHash` must be present and match `hashFn(claim)` where `claim` is a `VerificationClaim` object made up of `externalAddressUri` and `account`
+2. `claimHash` must be present and match `hashFn(claim)`
 3. `externalSignatureType` must be known
 4. `externalSignature` must be a valid [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature of the `claimHash` by `externalAddressUri`
 
