@@ -399,17 +399,12 @@ When a verification remove message `b` is received:
 3. If `b` does not exist in either set
    1. Add `b` to `removes` set
 
-### 4.3.1 Ethereum address verifications
+### 4.3.1 Ethereum EIP 191 version 0x45 address verifications
 
-The first type of verification supported is a self-authenticating proof of ownership of an Ethereum address. The `externalSignatureType` attribute for Ethereum address verifications is `eip-191-0x45`.
+The first type of verification supported is a self-authenticating proof of ownership of an Ethereum address. Here are custom message validation rules for this verification type:
 
-The bi-directional proof is created in three steps:
-
-1. Create a `VerificationClaim` object containing the Farcaster account and Ethereum address and hash the claim to create a unique claim hash.
-2. Have the Ethereum address sign the claim hash according to [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) (i.e. Ethereum's `personal_sign`).
-3. Create a `VerificationAdd` message containing the Ethereum address, claim hash, and signature and have the Farcaster account sign it like other messages.
-
-The `externalSignature` for an Ethereum address verification must be a valid [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature of the `claimHash` by `externalAddressUri`.
+- `externalSignatureType` must be `eip-191-0x45`
+- `externalSignature` must be a valid [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature (i.e. Ethereum's `personal_sign`) of the `claimHash`, signed by `externalAddressUri`
 
 ## 4.4 Metadata
 
