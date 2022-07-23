@@ -319,70 +319,83 @@ Actions are managed with an [LWW-Element-Set CRDT](<https://en.wikipedia.org/wik
 
 ## 4.3 Verifications
 
-Verifications are bi-directional proofs of ownership between Farcaster accounts and external identities. Initially, Ethereum addresses are the only supported external identities, though other blockchains can be added later.
+Verifications are bi-directional proofs of ownership between Farcaster accounts and external entities. Verifications can be used to prove ownership of Ethereum addresses, specific NFTs, other social media accounts, or even domains.
 
-Verifications must be opted in to by both the external identity (i.e. Ethereum address) and the Farcaster account. The bi-directional verification is implemented in two steps:
+Verifications have three core concepts:
 
-1. Create a `VerificationClaim` object that contains the external address and the Farcaster account. Have the external identity sign a hash of the claim object, creating a directional proof from the external identity to the Farcaster account.
-2. Create a `VerificationAdd` message containing the external address and signature from step 1. Have the Farcaster account sign the message and share it with the network, wrapping and verifying the verification claim.
+1. A claim that includes a reference to a Farcaster account and the external entity. The claim can be hashed to create a unique identifier for each claim.
+2. A directional proof from the external entity that is authorized to make the claim, showing intent to connect it to the Farcaster account.
+3. A directional proof from the Farcaster account accepting the request to associate the claim with the Farcaster account.
 
-In order to validate the `VerificationAdd` message, Farcaster hubs evaluate both the Farcaster signature as well as the external identity's signature. Initially, external signatures must implement [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) (i.e. Ethereum's `personal_sign`).
-
-Here are the schemas for `VerificationClaim` and `VerificationAdd`:
+Verification claims are structured as `VerificationClaim` objects:
 
 ```ts
 type VerificationClaim = {
-  externalAddressUri: string;
+  externalAddressUri: URI;
   account: number;
 };
-
-type VerificationAdd = {
-  message: {
-    body: {
-      externalAddressUri: string;
-      claimHash: string;
-      externalSignature: string;
-      externalSignatureType: 'eip-191-0x45';
-      schema: 'farcaster.xyz/schemas/v1/verification-add';
-    };
-    account: number;
-    timestamp: number;
-  };
-  envelope: {
-    hash: string;
-    hashType: 'BLAKE2b';
-    signature: string;
-    signatureType: 'ed25519' | 'ecdsa-secp256k1';
-    signerPubKey: string;
-  };
-};
 ```
 
-Verifications are stored in the Verifications Set, which is a modified [Last-Write-Wins-Element Set](<https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)>). Valid and unremoved `VerificationAdd` messages are stored in the `adds` set, indexed by their `claimHash`, a hash of the `VerificationClaim`. Any Farcaster account and external identity pair will have the same `claimHash`.
-
-Verifications can be removed by sending a valid `VerificationRemove` message to the network that references the `claimHash` to remove.
+Verifications are added via `VerificationAdd` messages and removed via `VerificationRemove` messages. Here are the types for the add and remove message bodies:
 
 ```ts
-type VerificationRemove = {
-  message: {
-    body: {
-      claimHash: string;
-      schema: 'farcaster.xyz/schemas/v1/verification-remove';
-    };
-    account: number;
-    timestamp: number;
-  };
-  envelope: {
-    hash: string;
-    hashType: 'BLAKE2b';
-    signature: string;
-    signatureType: 'ed25519' | 'ecdsa-secp256k1';
-    signerPubKey: string;
-  };
+type VerificationAddBody = {
+  externalAddressUri: string;
+  claimHash: string;
+  externalSignature: string;
+  externalSignatureType: 'eip-191-0x45';
+  schema: 'farcaster.xyz/schemas/v1/verification-add';
+};
+
+type VerificationRemoveBody = {
+  claimHash: string;
+  schema: 'farcaster.xyz/schemas/v1/verification-remove';
 };
 ```
 
-A valid `VerificationRemove` message is stored in the `removes` set, indexed by `claimHash`, and removes `claimHash` and the relevant `VerificationAdd` message from the `adds` set. A `claimHash` cannot be in both the `adds` set and the `removes` set, and conflicts are resolved using message timestamps.
+Notice how `VerificationAddBody` does not include the full claim object. The `VerificationClaim` can be reconstructed from the `externalAddressUri` and `account` attributes of the add message, so we exclude the claim to save space.
+
+Each type of verification has its own message validation mechanism. These are defined below in the subsections.
+
+#### Set Construction
+
+Verifications are stored in the Verifications Set, which is a modified [Last-Write-Wins-Element Set](<https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)>). Valid and unremoved verifications are stored as `VerificationAdd` messages in the `adds` set. Removed verifications are stored as `VerificationRemove` messages in the `removes` set. Messages are indexed by `claimHash` and a particular claim cannot exist in both sets simultaneously.
+
+Verifications can be re-added once they've been removed, and conflicts are resolved using timestamp. The external entities associated with verifications are effectively hidden once they are removed, because the `VerificationRemove` message only contains the claim hash.
+
+When a verification add message `a` is received:
+
+1. If `a` exists in the `removes` set
+   1. If existing remove message is more recent, discard `a`
+   2. Otherwise, move `a` to `adds` set
+2. If `a` exists in the `adds` set
+   1. If existing add message is more recent, discard `a`
+   2. Otherwise, overwrite `a` in the `adds` set with the new message
+3. If `a` does not exist in either set
+   1. Add `a` to `adds` set
+
+When a verification remove message `b` is received:
+
+1. If `b` exists in the `removes` set
+   1. If existing remove message is more recent, discard `b`
+   2. Otherwise, overwrite `b` in the `removes` set with the new message
+2. If `b` exists in the `adds` set
+   1. If existing remove message is more recent, discard `b`
+   2. Otherwise, move `b` from `adds` to `removes`
+3. If `b` does not exist in either set
+   1. Add `b` to `removes` set
+
+Each type of verification has its own message validation mechanism which are defined below.
+
+### 4.3.1 Ethereum address verifications
+
+The first type of verification supported is a self-authenticating proof of ownership of an Ethereum address. The bi-directional proof is created in three steps:
+
+1. Create a `VerificationClaim` object containing the Farcaster account and Ethereum address and hash the claim to create a unique claim identifier.
+2. Have the Ethereum address sign the claim hash according to [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) (i.e. Ethereum's `personal_sign`).
+3. Create a `VerificationAdd` message containing the Ethereum address, claim hash, and signature and have the Farcaster account sign it like other messages.
+
+#### Message Validation
 
 All `VerificationAdd` messages contain `externalAddressUri`, so a client can iterate through the `VerificationAdd` messages in the `adds` set to get all verified external identities. The `VerificationRemove` message schema only has `claimHash`, so the external identity is effectively hidden once the verification is removed.
 
@@ -401,41 +414,6 @@ Here are rules for `VerificationRemove` messages:
 
 1. `schema` must be known
 2. `claimHash` must be present
-
-#### Set construction and pseudocode
-
-Here is pseudo code to describe the Verifications Set in more detail. The set contains two data structures, both of which are initialized to empty:
-
-- `adds: Map<claimHash, VerificationAdd>` - valid `VerificationAdd` messages, indexed by `claimHash`
-- `removes: Map<claimHash, VerificationRemove>` - valid `VerificationRemove` messages, indexed by `claimHash`
-
-When a new `add(claimHash)` `VerificationAdd` message is received, we take the following steps:
-
-1. If `removes[claimHash]` is present
-   1. If `removes[claimHash].timestamp` is more recent than `add(claimHash).timestamp`, reject the incoming message
-   2. If `removes[claimHash].timestamp` is less recent than `add(claimHash).timestamp`
-      1. Drop `claimHash` from `removes`
-      2. Add `claimHash` to `adds` by setting `adds[claimHash] = add(claimHash)`
-2. If `adds[claimHash]` is present
-   1. If `adds[claimHash].hash` is the same as `add(claimHash).hash`, discard the incoming message as a duplicate
-   2. If `adds[claimHash].timestamp` is more recent than `add(claimHash).timestamp`, reject the incoming message
-   3. Otherwise overwrite `adds[claimHash]` with the incoming message by setting `adds[claimHash] = add(claimHash)`
-3. If `claimHash` is not present in either set
-   1. Add `claimHash` to `adds` by setting `adds[claimHash] = add(claimHash)`
-
-When a new `remove(claimHash)` `VerificationRemove` message is received, we take the following steps:
-
-1. If `removes[claimHash]` is present
-   1. If `removes[claimHash].hash` is the same as `remove(claimHash).hash`, discard the incoming message as a duplicate
-   2. If `removes[claimHash].timestamp` is more recent than `removes(claimHash).timestamp`, reject the incoming message
-   3. Otherwise overwrite `removes[claimHash]` with the incoming message by setting `removes[claimHash] = remove(claimHash)`
-2. If `adds[claimHash]` is present
-   1. If `adds[claimHash].timestamp` is more recent than `remove(claimHash).timestamp`, reject the incoming message
-   2. If `adds[claimHash].timestamp` is less recent than `remove(claimHash).timestamp`
-      1. Drop `claimHash` from `adds`
-      2. Add `claimHash` to `removes` by setting `removes[claimHash] = remove(claimHash)`
-3. If `claimHash` is not present in either set
-   1. Add `claimHash` to `removes` by setting `removes[claimHash] = remove(claimHash)`
 
 ## 4.4 Metadata
 
