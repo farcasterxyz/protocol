@@ -397,7 +397,7 @@ When a verification remove message `b` is received:
    1. If existing remove message is more recent or has the same timestamp with a higher lexicographical message hash, discard `b`
    2. Otherwise, overwrite `b` in the `removes` set with the new message
 2. If `b` exists in the `adds` set
-   1. If existing remove message is more recent, discard `b`
+   1. If existing add message is more recent, discard `b`
    2. Otherwise, move `b` from `adds` to `removes`
 3. If `b` does not exist in either set
    1. Add `b` to `removes` set
