@@ -331,7 +331,7 @@ Verification claims are structured as `VerificationClaim` objects:
 
 ```ts
 type VerificationClaim = {
-  externalAddressUri: URI;
+  externalUri: URI;
   account: number;
 };
 ```
@@ -340,7 +340,7 @@ Verifications are added via `VerificationAdd` messages and removed via `Verifica
 
 ```ts
 type VerificationAddBody = {
-  externalAddressUri: string;
+  externalUri: string;
   claimHash: string;
   externalSignature: string;
   externalSignatureType: 'eip-191-0x45'; // Will support other types over time
@@ -353,7 +353,7 @@ type VerificationRemoveBody = {
 };
 ```
 
-Notice how `VerificationAddBody` does not include the full claim object, because the claim can be reconstructed from the `externalAddressUri` and `account` attributes of the add message.
+The `VerificationAddBody` does not include the full claim object, because the claim can be reconstructed from the `externalUri` and `account` attributes of the add message.
 
 #### Message Validation
 
@@ -362,9 +362,10 @@ The `envelope` of `VerificationAdd` and `VerificationRemove` messages is validat
 Here are rules for `VerificationAdd` messages:
 
 1. `schema` must be known
-2. `claimHash` must be present and match `hashFn(claim)`
-3. `externalSignatureType` must be known
-4. `externalSignature` must be valid according to custom rules depending on `externalSignatureType`, which are defined in subsections below
+2. `externalUri` must be present
+3. `claimHash` must be present and match `hashFn(claim)`
+4. `externalSignatureType` must be known
+5. `externalSignature` must be valid according to custom rules depending on `externalSignatureType`, which are defined in the subsections below
 
 Here are rules for `VerificationRemove` messages:
 
@@ -375,15 +376,17 @@ Here are rules for `VerificationRemove` messages:
 
 Verifications are stored in the Verifications Set, which is a modified [Last-Write-Wins-Element Set](<https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)>). Valid and unremoved verifications are stored as `VerificationAdd` messages in the `adds` set. Removed verifications are stored as `VerificationRemove` messages in the `removes` set. Messages are indexed by `claimHash` and a particular claim cannot exist in both sets simultaneously.
 
-Verifications can be re-added once they've been removed, and conflicts are resolved using timestamp. Verification information like the external entity address is effectively hidden once a verification is removed, because the `VerificationRemove` message only contains the claim hash.
+Verifications can be re-added once they've been removed, and conflicts are resolved using timestamp with a preference towards remove messages when timestamps match. If two messages of the same operation (i.e. two adds or two removes) and same timestamp conflict, the one with the higher lexicographical message hash wins out.
+
+Verification information like the external entity address is effectively hidden once a verification is removed, because the `VerificationRemove` message only contains the claim hash.
 
 When a verification add message `a` is received:
 
 1. If `a` exists in the `removes` set
-   1. If existing remove message is more recent, discard `a`
+   1. If existing remove message is more recent or has the same timestamp, discard `a`
    2. Otherwise, move `a` to `adds` set
 2. If `a` exists in the `adds` set
-   1. If existing add message is more recent, discard `a`
+   1. If existing add message is more recent or has the same timestamp with a higher lexicographical message hash, discard `a`
    2. Otherwise, overwrite `a` in the `adds` set with the new message
 3. If `a` does not exist in either set
    1. Add `a` to `adds` set
@@ -391,7 +394,7 @@ When a verification add message `a` is received:
 When a verification remove message `b` is received:
 
 1. If `b` exists in the `removes` set
-   1. If existing remove message is more recent, discard `b`
+   1. If existing remove message is more recent or has the same timestamp with a higher lexicographical message hash, discard `b`
    2. Otherwise, overwrite `b` in the `removes` set with the new message
 2. If `b` exists in the `adds` set
    1. If existing remove message is more recent, discard `b`
@@ -404,7 +407,7 @@ When a verification remove message `b` is received:
 The first type of verification supported is a self-authenticating proof of ownership of an Ethereum address. Here are custom message validation rules for this verification type:
 
 - `externalSignatureType` must be `eip-191-0x45`
-- `externalSignature` must be a valid [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature (i.e. Ethereum's `personal_sign`) of the `claimHash`, signed by `externalAddressUri`
+- `externalSignature` must be a valid [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature (i.e. Ethereum's `personal_sign`) of the `claimHash`, signed by `externalUri`
 
 ## 4.4 Metadata
 
