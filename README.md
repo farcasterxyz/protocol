@@ -9,8 +9,8 @@
    3. [Applications](#23-applications)
    4. [Hubs](#24-hubs)
 3. [Identity](#3-identity)
-   1. [Farcaster ID Registry](#31-farcaster-id-registry)
-   1. [Farcaster Name Registry](#32-farcaster-name-registry)
+   1. [Farcaster ID Registry (FIR)](#31-farcaster-id-registry)
+   1. [Farcaster Name Registry (FNR)](#32-farcaster-name-registry)
    3. [Recovery](#33-recovery)
 4. [Replication](#4-replication)
    1. [Casts](#41-casts)
@@ -53,7 +53,7 @@ User data is then cryptographically signed by the identity and stored off-chain 
 
 A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. Individuals can operate several accounts simultaneously, like a real-name account and a company account.
 
-Each account has by a unique number associated with it called a Farcaster ID or a `fid`. A fid can be obtained by calling the *Farcaster ID Registry* or *FIR* from an Ethereum address. This address is known as the `custody address` and can sign off-chain and on-chain messages on behalf of the account. Users can optionally acquire a Farcaster Name or `fname` from the *Farcaster Name Registry* or *FNR* which issues it a unique name like `@alice`. 
+Each account has by a unique number associated with it called a Farcaster ID or an `fid`. Farcaster IDs can be obtained by calling the *Farcaster ID Registry (FIR)* from an Ethereum address. This address is known as the `custody address` and can sign off-chain and on-chain messages on behalf of the account. Users can optionally acquire a Farcaster Name or `fname` from the *Farcaster Name Registry (FNR)* which issues it a unique name like `@alice`. 
 
 ## 2.2 Signed Messages
 
@@ -107,13 +107,13 @@ The identity system ensures secure and decentralized ownership of user accounts.
 Farcaster's Identity System is separated into two on-chain contracts - a **Farcaster ID Registry (FIR)**, which issues new id numbers called `fids`, and a **Farcaster Name Registry (FNR)** which issues new usernames called `fnames`.
 
 
-## 3.1 Farcaster ID Registry
+## 3.1 Farcaster ID Registry (FIR)
 
-An account is created by calling `register` on the ID Registry from a user-controlled Ethereum address. The contract issues a new fid to this address. The fid can be transferred between addresses, though the contract ensures that an address owns only one account at a time.
+An account is created by calling `register` on the ID Registry from a user-controlled Ethereum address. The contract issues a new fid to this address. The fid can be transferred between addresses, though the contract ensures that an address owns only one fid at a time.
 
-Fids start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. A fid is represented with a uint256 which guarantees a practically infinite supply since it can be incremented to ~ 10^77.
+Farcaster IDs start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. An fid is represented with a uint256 which guarantees a practically infinite supply since it can be incremented to ~ 10^77.
 
-## 3.2 Farcaster Name Registry
+## 3.2 Farcaster Name Registry (FNR)
 
 A Farcaster Name or `fname` like `@alice` can be minted from the Farcaster Name Registry and attached to an fid. 
 
@@ -121,7 +121,7 @@ When minting a name, the contract checks that the name is unique and contains at
 
 Fnames are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Fnames have some properties that make them more practical. Fnames are cheaper to mint and are [recoverable](#recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and more straightforward to display because of the restricted length and character set.
 
-The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on  Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
+The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
 
 Fnames can be minted freely but are subject to two policies enforced by governance: 
 
@@ -133,7 +133,7 @@ Names that expire or are subject to a claim are moved back into the Farcaster Tr
 
 ## 3.3 Recovery
 
-Fids and fnames are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer. 
+Farcaster IDs and names are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer. 
 
 Users can set the recovery address to another address in their wallet, a multi-sig shared with friends, or a third-party recovery service. Users can also change the recovery address at any time. Ownership remains decentralized because the recovery address cannot make a transfer that the custody address does not approve.
 
@@ -175,8 +175,8 @@ Timestamps are compared as numbers, and hashes are compared as strings. Since st
 All messages must pass the following validations in addition to specific validations for the message type:
 
 1. `message.timestamp` is not more than 1 hour ahead of system time. 
-2. `message.id` must be a known fid number in the FIR.
-3. `signerPubKey` should be a valid [Root Signer or Delegate Signer](#45-signer-authorizations) for `message.id`
+2. `message.fid` must be a known fid number in the FIR.
+3. `signerPubKey` should be a valid [Root Signer or Delegate Signer](#45-signer-authorizations) for `message.fid`
 4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization. 
 5.  `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
 
@@ -422,7 +422,7 @@ _This section is still under development._
 
 A _Signer Authorization_ is a message that authorizes a new key pair to generate signatures for a Farcaster account.
 
-When a fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the _Root Signer_, can authorize other keypairs known as _Delegate Signers_. Unlike Root Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions. 
+When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the _Root Signer_, can authorize other keypairs known as _Delegate Signers_. Unlike Root Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions. 
 
 ```ts
 type SignerAuthorizationMessage = {
@@ -435,7 +435,7 @@ type SignerAuthorizationMessage = {
 
 Root Signers generate ECDSA signatures on the secp256k1 curve and can only publish Signer Authorization messages. All other types of messages must be signed by Delegate Signers, which creates EdDSA signatures on Curve25519[^ed25519]. Delegate Signers can be used to authorize new devices or even third-party services to sign messages for an account. If a Delegate Signer is compromised, it can be revoked by itself, an ancestor in its chain of trust, or any Root Signer. When a Signer is revoked, Hubs discard all of its signed messages because there is no way to tell the user's messages from the attackers.
 
-Users might also transfer a fid to a new custody address due to key recovery or changing wallets. It is usually desirable to preserve history and therefore both custody addresses become valid Root Signers. The set of valid signers for an fid form a series of distinct trees. Each tree's root is a historical custody address, and the leaves are delegate signers.
+Users might also transfer an fid to a new custody address due to key recovery or changing wallets. It is usually desirable to preserve history and therefore both custody addresses become valid Root Signers. The set of valid signers for an fid form a series of distinct trees. Each tree's root is a historical custody address, and the leaves are delegate signers.
 
 <!-- Diagram of Signer Tree -->
 
