@@ -11,7 +11,7 @@
 3. [Identity](#3-identity)
    1. [Farcaster ID Registry (FIR)](#31-farcaster-id-registry-fir)
    1. [Farcaster Name Registry (FNR)](#32-farcaster-name-registry-fnr)
-   3. [Recovery](#33-recovery)
+   1. [Recovery](#33-recovery)
 4. [Replication](#4-replication)
    1. [Casts](#41-casts)
    2. [Actions](#42-actions)
@@ -53,7 +53,7 @@ User data is then cryptographically signed by the identity and stored off-chain 
 
 A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. Individuals can operate several accounts simultaneously, like a real-name account and a company account.
 
-Each account has by a unique number associated with it called a Farcaster ID or an `fid`. Farcaster IDs can be obtained by calling the *Farcaster ID Registry (FIR)* from an Ethereum address. This address is known as the `custody address` and can sign off-chain and on-chain messages on behalf of the account. Users can optionally acquire a Farcaster Name or `fname` from the *Farcaster Name Registry (FNR)* which issues it a unique name like `@alice`. 
+Each account has by a unique number associated with it called a Farcaster ID or an `fid`. Farcaster IDs can be obtained by calling the _Farcaster ID Registry (FIR)_ from an Ethereum address. This address is known as the `custody address` and can sign off-chain and on-chain messages on behalf of the account. Users can optionally acquire a Farcaster Name or `fname` from the _Farcaster Name Registry (FNR)_ which issues it a unique name like `@alice`.
 
 ## 2.2 Signed Messages
 
@@ -62,7 +62,7 @@ Signed Messages are **tamper-proof** and **self-authenticating** objects that ar
 ```ts
 type SignedMessage = {
   message: {
-    body: any; 
+    body: any;
     fid: number;
     timestamp: number;
   };
@@ -78,7 +78,7 @@ type SignedMessage = {
 
 A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid keypair, like the custody address. The **envelope** contains the hash, signature, and the public key of the signing keypair, which any recipient can use to validate that the fid signed the message.
 
-The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an fid to look up the custody address on-chain and a timestamp for ordering. 
+The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an fid to look up the custody address on-chain and a timestamp for ordering.
 
 ## 2.3 Applications
 
@@ -96,7 +96,7 @@ Users must upload messages they create to a primary Hub and publish its URL on-c
 
 Users can also configure their primary Hub to replicate data from other Hubs. If Alice follows Bob and Charlie, who use separate Hubs, she can configure her Hub to download messages from theirs. When her client comes online, it can make a single request to her Hub and fetch Bob and Charlie's messages.
 
-Hubs maintain a connection to the FIR to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by *any* user from *any* Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's primary Hub.
+Hubs maintain a connection to the FIR to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by _any_ user from _any_ Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's primary Hub.
 
 Conceptually, Hubs form an **L2 network for storing social data**, though the network has different properties from blockchain-based L2s. Its consensus model has weaker consistency guarantees but stronger scalability guarantees because the network data is **shardable** down to the fid level.
 
@@ -106,7 +106,6 @@ The identity system ensures secure and decentralized ownership of user accounts.
 
 Farcaster's Identity System is separated into two on-chain contracts - a **Farcaster ID Registry (FIR)**, which issues new id numbers called `fids`, and a **Farcaster Name Registry (FNR)** which issues new usernames called `fnames`.
 
-
 ## 3.1 Farcaster ID Registry (FIR)
 
 An account is created by calling `register` on the ID Registry from a user-controlled Ethereum address. The contract issues a new fid to this address. The fid can be transferred between addresses, though the contract ensures that an address owns only one fid at a time.
@@ -115,7 +114,7 @@ Farcaster IDs start at 0 and are incremented by one every time a new registratio
 
 ## 3.2 Farcaster Name Registry (FNR)
 
-A Farcaster Name or `fname` like `@alice` can be minted from the Farcaster Name Registry and attached to an fid. 
+A Farcaster Name or `fname` like `@alice` can be minted from the Farcaster Name Registry and attached to an fid.
 
 When minting a name, the contract checks that the name is unique and contains at most 16 alphanumeric characters or dashes `^[a-zA-Z0-9-]{1,16}$`. The single dash (-) fname is reserved for a system account and will not be claimable. The mint happens over a two-phase commit reveal to prevent front-running registrations.
 
@@ -123,7 +122,7 @@ Fnames are ERC-721 tokens that are fully composable with the NFT ecosystem. Whil
 
 The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
 
-Fnames can be minted freely but are subject to two policies enforced by governance: 
+Fnames can be minted freely but are subject to two policies enforced by governance:
 
 1. A _prior ownership_ claim can be made by a user who owns a name on at least two major social media platforms if the current owner does not own the name on any major social media platforms.
 
@@ -133,7 +132,7 @@ Names that expire or are subject to a claim are moved back into the Farcaster Tr
 
 ## 3.3 Recovery
 
-Farcaster IDs and names are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer. 
+Farcaster IDs and names are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer.
 
 Users can set the recovery address to another address in their wallet, a multi-sig shared with friends, or a third-party recovery service. Users can also change the recovery address at any time. Ownership remains decentralized because the recovery address cannot make a transfer that the custody address does not approve.
 
@@ -174,12 +173,11 @@ Timestamps are compared as numbers, and hashes are compared as strings. Since st
 
 All messages must pass the following validations in addition to specific validations for the message type:
 
-1. `message.timestamp` is not more than 1 hour ahead of system time. 
+1. `message.timestamp` is not more than 1 hour ahead of system time.
 2. `message.fid` must be a known fid number in the FIR.
 3. `signerPubKey` should be a valid [Root Signer or Delegate Signer](#45-signer-authorizations) for `message.fid`
-4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization. 
-5.  `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
-
+4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization.
+5. `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
 
 ## 4.1 Casts
 
@@ -245,7 +243,7 @@ type CastRecast = {
 
 Recasts can be stored using a two-phase set just like Short Text Casts. The remove operation is identical, while the addition operation is performed with `CastRecast`, and has one additional rule:
 
-1. If there is a CastRecast `a` in the add **add-set** with the same `targetCastUri` and `fid` as the incoming CastRecast `rc`: 
+1. If there is a CastRecast `a` in the add **add-set** with the same `targetCastUri` and `fid` as the incoming CastRecast `rc`:
    - If `a > rc`, discard `d`
    - If `a < rc`, delete `a` and add `rc` into the rem-set
 
@@ -268,9 +266,8 @@ The remove message must contain the hash of the cast being removed and omit all 
 
 1. `schema` must be known.
 2. `targetCastHash` must not equal the `hash` of this message.
-4. `timestamp` must be <= system clock + 1 hour
-5. `fid` must be a known fid in the FIR
-
+3. `timestamp` must be <= system clock + 1 hour
+4. `fid` must be a known fid in the FIR
 
 ### 4.1.4 Embeds
 
@@ -298,7 +295,7 @@ type Action = {
       type: 'like' | 'follow';
       targetUri: FarcasterURI;
       schema: 'farcaster.xyz/schemas/v1/action';
-    }; 
+    };
     fid: number;
     timestamp: number;
   };
@@ -422,7 +419,7 @@ _This section is still under development._
 
 A _Signer Authorization_ is a message that authorizes a new key pair to generate signatures for a Farcaster account.
 
-When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the _Root Signer_, can authorize other keypairs known as _Delegate Signers_. Unlike Root Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions. 
+When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the _Root Signer_, can authorize other keypairs known as _Delegate Signers_. Unlike Root Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
 
 ```ts
 type SignerAuthorizationMessage = {
@@ -447,7 +444,7 @@ A Set conflict can occur if two valid Signers separately authorize the same Dele
 
 _This section is still under development._
 
-A Root Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an fid. 
+A Root Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an fid.
 
 A revocation must include the blockchash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid root signer. All previous custody addresses and delegate signers issued by them are invalidated.
 
@@ -491,7 +488,8 @@ Hub releases that include backwards incompatible changes must implement both con
 A malicious attacker can use a compromised delegate signer to impersonate the user by signing messages. As long as the user has control over a parent signer or the root signer, they can invalidate the signare and issue a new one. Unfortunately, this means that all messages signed by that signer will be lost since we cannot tell which ones were signed by the attacker. Clients can mitigate this by constantly rolling keys after every few thousand messages, which limits the scope of how many messages will be lost when a signer is reset.
 
 ## 7.2 Eclipse Attacks
-A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network. Hubs can maintain an internal score for each peer based on data availability. Periodically, they lookup the location of the user's source Hub which is published in the FIR and sync the latest messages. If their peers do not have an up-to-date copy of this, their scores are lowered until eventually the peer is dropped and a new one is selected.  
+
+A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network. Hubs can maintain an internal score for each peer based on data availability. Periodically, they lookup the location of the user's source Hub which is published in the FIR and sync the latest messages. If their peers do not have an up-to-date copy of this, their scores are lowered until eventually the peer is dropped and a new one is selected.
 
 ## 7.3 Flooding Attacks
 

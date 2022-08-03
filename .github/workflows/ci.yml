@@ -1,0 +1,37 @@
+name: CI
+on:
+  # CI is run on main because new branches can only access caches from master, not previous branches.
+  # So building on master allows new PR's to get the cache from before.
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    timeout-minutes: 5
+    
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: install node
+        uses: actions/setup-node@v3
+        with:
+          cache: "yarn"
+          node-version: "18"
+
+      - name: Restore cached dependencies for Node modules
+        id: module-cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ github.workspace }}/node_modules
+          key: ${{ runner.os }}--node--${{ hashFiles('**/yarn.lock') }}
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Run prettier check
+        run: yarn lint:check
