@@ -9,8 +9,8 @@
    3. [Applications](#23-applications)
    4. [Hubs](#24-hubs)
 3. [Identity](#3-identity)
-   1. [Farcaster ID Registry (FIR)](#31-farcaster-id-registry)
-   1. [Farcaster Name Registry (FNR)](#32-farcaster-name-registry)
+   1. [Farcaster ID Registry (FIR)](#31-farcaster-id-registry-fir)
+   1. [Farcaster Name Registry (FNR)](#32-farcaster-name-registry-fnr)
    3. [Recovery](#33-recovery)
 4. [Replication](#4-replication)
    1. [Casts](#41-casts)
@@ -119,7 +119,7 @@ A Farcaster Name or `fname` like `@alice` can be minted from the Farcaster Name 
 
 When minting a name, the contract checks that the name is unique and contains at most 16 alphanumeric characters or dashes `^[a-zA-Z0-9-]{1,16}$`. The single dash (-) fname is reserved for a system account and will not be claimable. The mint happens over a two-phase commit reveal to prevent front-running registrations.
 
-Fnames are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Fnames have some properties that make them more practical. Fnames are cheaper to mint and are [recoverable](#recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and more straightforward to display because of the restricted length and character set.
+Fnames are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Fnames have some properties that make them more practical. Fnames are cheaper to mint and are [recoverable](#33-recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and more straightforward to display because of the restricted length and character set.
 
 The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
 
