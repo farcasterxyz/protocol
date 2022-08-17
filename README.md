@@ -92,11 +92,11 @@ A more sophisticated application might add a proxy backend server that indexes d
 
 A Hub is an always-on server that validates, stores, and replicates Signed Messages.
 
-Users must upload messages they create to a primary Hub and publish its URL on-chain using the FIR. Their followers can use this Hub to find and download their messages. Users can run a Hub themselves or use a third-party Hub service. They are incentivized to ensure that it works correctly, or their followers will not receive their messages.
+Users select a Hub as their _home_ and publish its URL on-chain using the FIR. Their followers can use this URL to find and download their messages. Users can run the home Hub themselves or use a third-party hosting service. They are incentivized to ensure that it works correctly, or their followers will not receive their messages.
 
-Users can also configure their primary Hub to replicate data from other Hubs. If Alice follows Bob and Charlie, who use separate Hubs, she can configure her Hub to download messages from theirs. When her client comes online, it can make a single request to her Hub and fetch Bob and Charlie's messages.
+Users can also configure their home Hub to replicate data from other Hubs. If Alice follows Bob and Charlie, who use separate Hubs, she can configure her Hub to download messages from theirs. When her client comes online, it can make a single request to her Hub and fetch Bob and Charlie's messages.
 
-Hubs maintain a connection to the FIR to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by _any_ user from _any_ Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's primary Hub.
+Hubs maintain a connection to the FIR to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by _any_ user from _any_ Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's home Hub.
 
 Conceptually, Hubs form an **L2 network for storing social data**, though the network has different properties from blockchain-based L2s. Its consensus model has weaker consistency guarantees but stronger scalability guarantees because the network data is **shardable** down to the fid level.
 
@@ -111,6 +111,8 @@ Farcaster's Identity System is separated into two on-chain contracts - a **Farca
 An account is created by calling `register` on the ID Registry from a user-controlled Ethereum address. The contract issues a new fid to this address. The fid can be transferred between addresses, though the contract ensures that an address owns only one fid at a time.
 
 Farcaster IDs start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. An fid is represented with a uint256 which guarantees a practically infinite supply since it can be incremented to ~ 10^77.
+
+Users can configure a _home_, which is the URL of the Hub they use to upload their messages. Other Hubs that want to replicate the user's data can always find it at this location. It is an optional property that is emitted as an on-chain event, and can be set during registration or any time later. 
 
 ## 3.2 Farcaster Name Registry (FNR)
 
