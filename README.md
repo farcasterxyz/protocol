@@ -333,6 +333,7 @@ Verification claims are structured as `VerificationClaim` objects:
 type VerificationClaim = {
   externalUri: URI;
   account: number;
+  blockHash: string;
 };
 ```
 
@@ -342,6 +343,7 @@ Verifications are added via `VerificationAdd` messages and removed via `Verifica
 type VerificationAddBody = {
   externalUri: string;
   claimHash: string;
+  blockHash: string;
   externalSignature: string;
   externalSignatureType: 'eip-191-0x45'; // Will support other types over time
   schema: 'farcaster.xyz/schemas/v1/verification-add';
@@ -364,8 +366,9 @@ Here are rules for `VerificationAdd` messages:
 1. `schema` must be known
 2. `externalUri` must be present
 3. `claimHash` must be present and match `hashFn(claim)`
-4. `externalSignatureType` must be known
-5. `externalSignature` must be valid according to custom rules depending on `externalSignatureType`, which are defined in the subsections below
+4. `blockHash` must be known
+5. `externalSignatureType` must be known
+6. `externalSignature` must be valid according to custom rules depending on `externalSignatureType`, which are defined in the subsections below
 
 Here are rules for `VerificationRemove` messages:
 
