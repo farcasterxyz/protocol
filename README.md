@@ -122,7 +122,7 @@ When minting a name, the contract checks that the name is unique and contains at
 
 Fnames are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Fnames have some properties that make them more practical. Fnames are cheaper to mint and are [recoverable](#33-recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and more straightforward to display because of the restricted length and character set.
 
-The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
+The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on January 1st. Users 30-day grace period to renew their subscription after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending December 31st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
 
 Fnames can be minted freely but are subject to two policies enforced by governance:
 
