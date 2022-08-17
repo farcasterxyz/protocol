@@ -1,5 +1,7 @@
 # Farcaster Protocol
 
+![Archway](/images/arch512.png)
+
 ## Contents
 
 1. [Introduction](#1-introduction)
