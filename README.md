@@ -113,7 +113,7 @@ An account is created by calling `register` on the ID Registry from a user-contr
 
 Farcaster IDs start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. An fid is represented with a uint256 which guarantees a practically infinite supply since it can be incremented to ~ 10^77.
 
-Users can configure a _home_, which is the URL of the Hub they use to upload their messages. Other Hubs that want to replicate the user's data can always find it at this location. It is an optional property that is emitted as an on-chain event, and can be set during registration or any time later. 
+Users can configure a _home_, which is the URL of the Hub they use to upload their messages. Other Hubs that want to replicate the user's data can always find it at this location. It is an optional property that is emitted as an on-chain event, and can be set during registration or any time later.
 
 ## 3.2 Farcaster Name Registry (FNR)
 
@@ -472,15 +472,15 @@ _This section is still under development and covers the peer discovery mechanism
 
 Farcaster is intended to be a long-lived protocol and built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers. Users are expected to be on the latest release soon after it comes out.
 
-The versioning system reflects this and notably does not folow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases  increment the patch version. So a successful first release would bump the verison to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`. 
+The versioning system reflects this and notably does not folow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases increment the patch version. So a successful first release would bump the verison to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`.
 
 ## 6.1 Hub Releases
 
-Hub operate on a _release train_ where a new version is released every 12 weeks to the Farcaster mainnet. To encourage frequent updates, Hubs are programmed to shut down 16 weeks after their release date, giving operators 4 weeks to upgrade to the latest version. The new release is also programmed to stop peering with older versions 4 weeks after its release to ensure that the network safely cuts over. 
+Hub operate on a _release train_ where a new version is released every 12 weeks to the Farcaster mainnet. To encourage frequent updates, Hubs are programmed to shut down 16 weeks after their release date, giving operators 4 weeks to upgrade to the latest version. The new release is also programmed to stop peering with older versions 4 weeks after its release to ensure that the network safely cuts over.
 
-Backwards incompatible Hub changes can be introduced safely with feature flags in the release train system. The feature can be programmed to turn on after the 4 week point, when older hubs are guaranteed to be disconnected from the network. Hubs can use the Ethereum block timestamp to co-ordinate their clocks and synchronize the cut over. 
+Backwards incompatible Hub changes can be introduced safely with feature flags in the release train system. The feature can be programmed to turn on after the 4 week point, when older hubs are guaranteed to be disconnected from the network. Hubs can use the Ethereum block timestamp to co-ordinate their clocks and synchronize the cut over.
 
-Farcaster will also operate a devnet, where new builds are released every week and one or more testnets, where a build is released 4 weeks before the mainnet release. Every release to devnet, testnet and mainnet branches from main and stabilizes, allowing main to continue moving forward with changes.  
+Farcaster will also operate a devnet, where new builds are released every week and one or more testnets, where a build is released 4 weeks before the mainnet release. Every release to devnet, testnet and mainnet branches from main and stabilizes, allowing main to continue moving forward with changes.
 
 ```mermaid
 gantt
@@ -504,7 +504,7 @@ gantt
     v2.1.0      :after c2, 8w
     v2.1.0-test :c2, after c1, 4w
     v2.0.0      :done, c1, 2014-01-05, 8w
-            
+
 
     section Mainnet
     v2.1.0      :2014-03-31, 8w
@@ -514,14 +514,13 @@ gantt
 
 ## 6.2 Contract Releases
 
-Contracts that are upgradable will be updated on an as-needed basis, and we expect this to be extremely rare. Unlike Hubs, contracts do not follow any pre-determined release schedule. If a contract is not dependent on any hub changes it can be deployed at any time. If it is dependent on hub changes, the hub release must ship and the 4 week waiting period must pass before the contract can be safely deployed. 
+Contracts that are upgradable will be updated on an as-needed basis, and we expect this to be extremely rare. Unlike Hubs, contracts do not follow any pre-determined release schedule. If a contract is not dependent on any hub changes it can be deployed at any time. If it is dependent on hub changes, the hub release must ship and the 4 week waiting period must pass before the contract can be safely deployed.
 
 Contract versions are set to the version of the hub they depend on, or the most recent release if they are not dependent on any specific version. The version is also tracked in the Solidity class name to keep track of upgrades. So the first version would be `IDRegistry_2`, while an upgrade made after Hub `v2.1.1` would be called `IDRegistry_2_1_1`.
 
+## 6.3 Protocol Releases
 
-## 6.3 Protocol Releases 
-
-Protocol documentation in this repository will change in lockstep with contract and hub versions. Tagging and releases will follow the same structure that the Hubs employ. 
+Protocol documentation in this repository will change in lockstep with contract and hub versions. Tagging and releases will follow the same structure that the Hubs employ.
 
 # 7. Security Considerations
 
