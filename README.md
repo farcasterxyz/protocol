@@ -18,7 +18,7 @@
    3. [Verifications](#43-verifications)
    4. [Metadata](#44-metadata)
    5. [Signer Authorizations](#45-signer-authorizations)
-   6. [Root Signer Revocations](#46-root-signer-revocations)
+   6. [Custody Signer Revocations](#46-root-signer-revocations)
    7. [Sharding](#47-sharding)
 5. [Peering](#5-peering)
 6. [Upgradeability](#6-upgradeability)
@@ -92,11 +92,11 @@ A more sophisticated application might add a proxy backend server that indexes d
 
 A Hub is an always-on server that validates, stores, and replicates Signed Messages.
 
-Users must upload messages they create to a primary Hub and publish its URL on-chain using the FIR. Their followers can use this Hub to find and download their messages. Users can run a Hub themselves or use a third-party Hub service. They are incentivized to ensure that it works correctly, or their followers will not receive their messages.
+Users select a Hub as their _home_ and publish its URL on-chain using the FIR. Their followers can use this URL to find and download their messages. Users can run the home Hub themselves or use a third-party hosting service. They are incentivized to ensure that it works correctly, or their followers will not receive their messages.
 
-Users can also configure their primary Hub to replicate data from other Hubs. If Alice follows Bob and Charlie, who use separate Hubs, she can configure her Hub to download messages from theirs. When her client comes online, it can make a single request to her Hub and fetch Bob and Charlie's messages.
+Users can also configure their home Hub to replicate data from other Hubs. If Alice follows Bob and Charlie, who use separate Hubs, she can configure her Hub to download messages from theirs. When her client comes online, it can make a single request to her Hub and fetch Bob and Charlie's messages.
 
-Hubs maintain a connection to the FIR to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by _any_ user from _any_ Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's primary Hub.
+Hubs maintain a connection to the FIR to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by _any_ user from _any_ Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's home Hub.
 
 Conceptually, Hubs form an **L2 network for storing social data**, though the network has different properties from blockchain-based L2s. Its consensus model has weaker consistency guarantees but stronger scalability guarantees because the network data is **shardable** down to the fid level.
 
@@ -112,6 +112,8 @@ An account is created by calling `register` on the ID Registry from a user-contr
 
 Farcaster IDs start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. An fid is represented with a uint256 which guarantees a practically infinite supply since it can be incremented to ~ 10^77.
 
+Users can configure a _home_, which is the URL of the Hub they use to upload their messages. Other Hubs that want to replicate the user's data can always find it at this location. It is an optional property that is emitted as an on-chain event, and can be set during registration or any time later. 
+
 ## 3.2 Farcaster Name Registry (FNR)
 
 A Farcaster Name or `fname` like `@alice` can be minted from the Farcaster Name Registry and attached to an fid.
@@ -120,7 +122,7 @@ When minting a name, the contract checks that the name is unique and contains at
 
 Fnames are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Fnames have some properties that make them more practical. Fnames are cheaper to mint and are [recoverable](#33-recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and more straightforward to display because of the restricted length and character set.
 
-The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on Farcaster Day (August 1st). Users who do not renew their usernames by this day have a 30-day grace period after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending August 1st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
+The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on January 1st. Users 30-day grace period to renew their subscription after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending December 31st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
 
 Fnames can be minted freely but are subject to two policies enforced by governance:
 
@@ -175,7 +177,7 @@ All messages must pass the following validations in addition to specific validat
 
 1. `message.timestamp` is not more than 1 hour ahead of system time.
 2. `message.fid` must be a known fid number in the FIR.
-3. `signerPubKey` should be a valid [Root Signer or Delegate Signer](#45-signer-authorizations) for `message.fid`
+3. `signerPubKey` should be a valid [Custody Signer or Delegate Signer](#45-signer-authorizations) for `message.fid`
 4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization.
 5. `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
 
@@ -419,7 +421,7 @@ _This section is still under development._
 
 A _Signer Authorization_ is a message that authorizes a new key pair to generate signatures for a Farcaster account.
 
-When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the _Root Signer_, can authorize other keypairs known as _Delegate Signers_. Unlike Root Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
+When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the _Custody Signer_, can authorize other keypairs known as _Delegate Signers_. Unlike Custody Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
 
 ```ts
 type SignerAuthorizationMessage = {
@@ -430,23 +432,23 @@ type SignerAuthorizationMessage = {
 };
 ```
 
-Root Signers generate ECDSA signatures on the secp256k1 curve and can only publish Signer Authorization messages. All other types of messages must be signed by Delegate Signers, which creates EdDSA signatures on Curve25519[^ed25519]. Delegate Signers can be used to authorize new devices or even third-party services to sign messages for an account. If a Delegate Signer is compromised, it can be revoked by itself, an ancestor in its chain of trust, or any Root Signer. When a Signer is revoked, Hubs discard all of its signed messages because there is no way to tell the user's messages from the attackers.
+Custody Signers generate ECDSA signatures on the secp256k1 curve and can only publish Signer Authorization messages. All other types of messages must be signed by Delegate Signers, which creates EdDSA signatures on Curve25519[^ed25519]. Delegate Signers can be used to authorize new devices or even third-party services to sign messages for an account. If a Delegate Signer is compromised, it can be revoked by itself, an ancestor in its chain of trust, or any Custody Signer. When a Signer is revoked, Hubs discard all of its signed messages because there is no way to tell the user's messages from the attackers.
 
-Users might also transfer an fid to a new custody address due to key recovery or changing wallets. It is usually desirable to preserve history and therefore both custody addresses become valid Root Signers. The set of valid signers for an fid form a series of distinct trees. Each tree's root is a historical custody address, and the leaves are delegate signers.
+Users might also transfer an fid to a new custody address due to key recovery or changing wallets. It is usually desirable to preserve history and therefore both custody addresses become valid Custody Signers. The set of valid signers for an fid form a series of distinct trees. Each tree's root is a historical custody address, and the leaves are delegate signers.
 
 <!-- Diagram of Signer Tree -->
 
-The Signer Set is a modified two-phase set with remove-wins and last-write-wins semantics. New messages are added to the set if signed by a valid delegate or root signer. A remove message is accepted if signed by itself or by an ancestor. A Signer can never be re-added once removed, and all of its descendant children and messages are discarded.
+The Signer Set is a modified two-phase set with remove-wins and last-write-wins semantics. New messages are added to the set if signed by a valid delegate or custody signer. A remove message is accepted if signed by itself or by an ancestor. A Signer can never be re-added once removed, and all of its descendant children and messages are discarded.
 
 A Set conflict can occur if two valid Signers separately authorize the same Delegate Signer, which breaks the tree data structure. If this occurs, the Set retains the message with the highest timestamp and lexicographical hash, in that order.
 
-## 4.6 Root Signer Revocations
+## 4.6 Custody Signer Revocations
 
 _This section is still under development._
 
-A Root Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an fid.
+A Custody Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an fid.
 
-A revocation must include the blockchash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid root signer. All previous custody addresses and delegate signers issued by them are invalidated.
+A revocation must include the blockchash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid custody signer. All previous custody addresses and delegate signers issued by them are invalidated.
 
 ```ts
 type RootRevocationBody = {
@@ -485,7 +487,7 @@ Hub releases that include backwards incompatible changes must implement both con
 
 ## 7.1 Signer Compromise
 
-A malicious attacker can use a compromised delegate signer to impersonate the user by signing messages. As long as the user has control over a parent signer or the root signer, they can invalidate the signare and issue a new one. Unfortunately, this means that all messages signed by that signer will be lost since we cannot tell which ones were signed by the attacker. Clients can mitigate this by constantly rolling keys after every few thousand messages, which limits the scope of how many messages will be lost when a signer is reset.
+A malicious attacker can use a compromised delegate signer to impersonate the user by signing messages. As long as the user has control over a parent signer or the custody signer, they can invalidate the signare and issue a new one. Unfortunately, this means that all messages signed by that signer will be lost since we cannot tell which ones were signed by the attacker. Clients can mitigate this by constantly rolling keys after every few thousand messages, which limits the scope of how many messages will be lost when a signer is reset.
 
 ## 7.2 Eclipse Attacks
 
