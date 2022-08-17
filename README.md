@@ -21,9 +21,10 @@
    6. [Custody Signer Revocations](#46-root-signer-revocations)
    7. [Sharding](#47-sharding)
 5. [Peering](#5-peering)
-6. [Upgradeability](#6-upgradeability)
-   1. [Minor Upgrades](#61-minor-upgrades)
-   2. [Major Upgrades](#62-major-upgrades)
+6. [Releases](#6-releases)
+   1. [Hub Releases](#61-hub-releases)
+   2. [Contract Releases](#62-contract-releases)
+   3. [Protoocl Releases](#63-protocol-releases)
 7. [Security Considerations](#7-security-considerations)
    1. [Signer Compromise](#71-signer-compromise)
    2. [Eclipse Attacks](#72-eclipse-attacks)
@@ -112,7 +113,7 @@ An account is created by calling `register` on the ID Registry from a user-contr
 
 Farcaster IDs start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. An fid is represented with a uint256 which guarantees a practically infinite supply since it can be incremented to ~ 10^77.
 
-Users can configure a _home_, which is the URL of the Hub they use to upload their messages. Other Hubs that want to replicate the user's data can always find it at this location. It is an optional property that is emitted as an on-chain event, and can be set during registration or any time later. 
+Users can configure a _home_, which is the URL of the Hub they use to upload their messages. Other Hubs that want to replicate the user's data can always find it at this location. It is an optional property that is emitted as an on-chain event, and can be set during registration or any time later.
 
 ## 3.2 Farcaster Name Registry (FNR)
 
@@ -465,23 +466,61 @@ Selective replication only provides a partial view of the network. If a Hub is s
 
 # 5. Peering
 
-This section is still under development and covers the protocols by which Hubs discover and exchange signed messages with their peers.
+_This section is still under development and covers the peer discovery mechanisms_
 
-# 6. Upgradeability
+# 6. Releases
 
-Farcaster is intended to be a long-lived protocol and built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular, painless and bring improvements for users and operators. New versions of the Hub will be released every 6 weeks. Upgrading should require just a few minutes of downtime for the operator in most cases. Hubs come with a "time bomb" which forces them to shut down 2 weeks after a new release is published.
+Farcaster is intended to be a long-lived protocol and built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers. Users are expected to be on the latest release soon after it comes out.
 
-## 6.1 Minor Upgrades
+The versioning system reflects this and notably does not folow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases increment the patch version. So a successful first release would bump the verison to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`.
 
-A minor upgrade is a backwards compatible change to the Farcaster consensus protocol. The old and new versions of the protocol can run safely side by side and reach consensus on the network. Some examples of minor upgrades including adding a new type of message, removing an existing message type or modifying message schemas to add new, optional properties.
+## 6.1 Hub Releases
 
-## 6.2 Major Upgrades
+Hub operate on a _release train_ where a new version is released every 12 weeks to the Farcaster mainnet. To encourage frequent updates, Hubs are programmed to shut down 16 weeks after their release date, giving operators 4 weeks to upgrade to the latest version. The new release is also programmed to stop peering with older versions 4 weeks after its release to ensure that the network safely cuts over.
 
-A major upgrade is a backwards incompatible change to the Farcaster consensus protocol. If the new protocol and the old protocol were run side by side, they might end up in a divergent state. Some example of upgrades that may require major changes are changes to the merge logic in sets or adding new required properties to schemas.
+Backwards incompatible Hub changes can be introduced safely with feature flags in the release train system. The feature can be programmed to turn on after the 4 week point, when older hubs are guaranteed to be disconnected from the network. Hubs can use the Ethereum block timestamp to co-ordinate their clocks and synchronize the cut over.
 
-Backwards incompatible changes to an existing schema are possible, but discouraged since they increase protocol complexity. The Hubs must assume that old data and new data can live side-by-side and will have to have special consensus rules to handle both.
+Farcaster will also operate a devnet, where new builds are released every week and one or more testnets, where a build is released 4 weeks before the mainnet release. Every release to devnet, testnet and mainnet branches from main and stabilizes, allowing main to continue moving forward with changes.
 
-Hub releases that include backwards incompatible changes must implement both consensus algorithms. They are programmed to run the old consensus model until a specific Ethereum block is mined. This block is chosen such that it will occur after the release time bomb goes off, which gives us high confidence that all nodes are running the new version and switch to the new algorithm at once.
+```mermaid
+gantt
+    title Lifecycle of a Hub Release
+    dateFormat  YYYY-MM-DD
+    axisFormat  Week %W
+
+
+    section Devnet
+    v2.1.0-dev-1     :b1, 2014-01-05, 1w
+    v2.1.0-dev-2     :b2, after b1, 1w
+    v2.1.0-dev-3     :b3, after b2, 1w
+    v2.1.0-dev-4     :b4, after b3, 1w
+    v2.1.0-dev-5     :b5, after b4, 1w
+    v2.1.0-dev-6     :b6, after b5, 1w
+    v2.1.0-dev-7     :b7, after b6, 1w
+    v2.1.0-dev-8     :b8, after b7, 1w
+
+
+    section Testnet
+    v2.1.0      :after c2, 8w
+    v2.1.0-test :c2, after c1, 4w
+    v2.0.0      :done, c1, 2014-01-05, 8w
+
+
+    section Mainnet
+    v2.1.0      :2014-03-31, 8w
+    v2.0.0      :done, a1, 2014-01-05  , 16w
+
+```
+
+## 6.2 Contract Releases
+
+Contracts that are upgradable will be updated on an as-needed basis, and we expect this to be extremely rare. Unlike Hubs, contracts do not follow any pre-determined release schedule. If a contract is not dependent on any hub changes it can be deployed at any time. If it is dependent on hub changes, the hub release must ship and the 4 week waiting period must pass before the contract can be safely deployed.
+
+Contract versions are set to the version of the hub they depend on, or the most recent release if they are not dependent on any specific version. The version is also tracked in the Solidity class name to keep track of upgrades. So the first version would be `IDRegistry_2`, while an upgrade made after Hub `v2.1.1` would be called `IDRegistry_2_1_1`.
+
+## 6.3 Protocol Releases
+
+Protocol documentation in this repository will change in lockstep with contract and hub versions. Tagging and releases will follow the same structure that the Hubs employ.
 
 # 7. Security Considerations
 
