@@ -213,7 +213,7 @@ Short Text Casts can be represented as a series of trees, where each root is a C
 
 #### Set Construction
 
-Short Text Casts for a user are stored in a two-phase set CRDT[^two-phase-set], wwhich contains an **add-set** that stores additions and a **rem-set** which stores [removes](#4). An addition is performed with a `CastShortTextBody` message, while a remove is performed with a `CastRemove`.
+Short Text Casts for a user are stored in a two-phase set CRDT[^two-phase-set], which contains an **add-set** that stores additions and a **rem-set** which stores [removes](#4). An addition is performed with a `CastShortTextBody` message, while a remove is performed with a `CastRemove`.
 
 When an addition message `c` is received:
 
