@@ -451,7 +451,7 @@ _This section is still under development._
 
 A Custody Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an fid.
 
-A revocation must include the blockchash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid custody signer. All previous custody addresses and delegate signers issued by them are invalidated.
+A revocation must include the blockhash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid custody signer. All previous custody addresses and delegate signers issued by them are invalidated.
 
 ```ts
 type RootRevocationBody = {
