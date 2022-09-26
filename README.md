@@ -26,7 +26,7 @@
 6. [Releases](#6-releases)
    1. [Hub Releases](#61-hub-releases)
    2. [Contract Releases](#62-contract-releases)
-   3. [Protoocl Releases](#63-protocol-releases)
+   3. [Protocol Releases](#63-protocol-releases)
 7. [Security Considerations](#7-security-considerations)
    1. [Signer Compromise](#71-signer-compromise)
    2. [Eclipse Attacks](#72-eclipse-attacks)
@@ -79,7 +79,7 @@ type SignedMessage = {
 };
 ```
 
-A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid keypair, like the custody address. The **envelope** contains the hash, signature, and the public key of the signing keypair, which any recipient can use to validate that the fid signed the message.
+A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid key-pair, like the custody address. The **envelope** contains the hash, signature, and the public key of the signing key-pair, which any recipient can use to validate that the fid signed the message.
 
 The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an fid to look up the custody address on-chain and a timestamp for ordering.
 
@@ -201,7 +201,7 @@ type CastShortTextBody = {
 };
 ```
 
-Short Text Casts can be represented as a series of trees, where each root is a Cast or URI, and each node is a Cast. This is a useful property for threading, since there is a determinstic order to how messages should be displayed in the UI during a back and forth conversation. It is impossible to break such a tree by introducing a cycle because of the requirement that every node must be hashed and signed before a child can reference it. If the parent or child attempts to change their `parentUri` after finalization, their hash changes making them a distinct node in the tree.
+Short Text Casts can be represented as a series of trees, where each root is a Cast or URI, and each node is a Cast. This is a useful property for threading, since there is a deterministic order to how messages should be displayed in the UI during a back and forth conversation. It is impossible to break such a tree by introducing a cycle because of the requirement that every node must be hashed and signed before a child can reference it. If the parent or child attempts to change their `parentUri` after finalization, their hash changes making them a distinct node in the tree.
 
 <!-- Diagram of a Set of Short Text Casts -->
 
@@ -416,7 +416,7 @@ The first type of verification supported is a self-authenticating proof of owner
 
 ## 4.4 Metadata
 
-_This section is still under development and will cover a CRDT for allowing arbitrary metdata to be added to a user's account like a display name or profile picture._
+_This section is still under development and will cover a CRDT for allowing arbitrary metadata to be added to a user's account like a display name or profile picture._
 
 ## 4.5 Signer Authorizations
 
@@ -424,7 +424,7 @@ _This section is still under development._
 
 A _Signer Authorization_ is a message that authorizes a new key pair to generate signatures for a Farcaster account.
 
-When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the _Custody Signer_, can authorize other keypairs known as _Delegate Signers_. Unlike Custody Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
+When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this key-pair into every device since it increases the risk of account compromise. The custody address, also known as the _Custody Signer_, can authorize other key-pairs known as _Delegate Signers_. Unlike Custody Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
 
 ```ts
 type SignerAuthorizationMessage = {
@@ -474,7 +474,7 @@ _This section is still under development and covers the peer discovery mechanism
 
 Farcaster is intended to be a long-lived protocol and built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers. Users are expected to be on the latest release soon after it comes out.
 
-The versioning system reflects this and notably does not folow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases increment the patch version. So a successful first release would bump the verison to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`.
+The versioning system reflects this and notably does not follow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases increment the patch version. So a successful first release would bump the version to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`.
 
 ## 6.1 Hub Releases
 
@@ -540,7 +540,7 @@ A flooding attack is when a malicious user keeps acquiring new accounts and broa
 
 ## 7.4 DDOS Attacks
 
-A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitimate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require aggressive mitigations like whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.
+A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitimate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.
 
 ## 7.5 Replay Attacks
 
