@@ -109,7 +109,7 @@ The Farcaster Identity system must ensure that user accounts:
 
 1. Can be owned in a secure, decentralized manner
 2. Are easy to recognize visually when using a social network
-3. Are quick and easy to set up (< 1 minute of work, < 10 USD)
+3. Are quick and easy to set up (< 1 minute of work, ~ 10 USD)
 4. Are recoverable if lost, without compromising decentralization.
 
 These goals are challenging to achieve within an identity system because they are often in conflict. For instance, having a decentralized and trustworthy namespace is hard. A fully decentralized namespace could not prevent an early user from squatting `@elonmusk`, and a heavily squatted namespace is not very useful.
@@ -134,6 +134,8 @@ An fname, along with a profile picture, display name and verification marks, hel
 
 Fnames are issued as NFT's by the Farcaster Name Registry on a first-come-first-serve basis. Each name must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. They have specific properties that make them useful in a social network relative to other namespaces like ENS. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) because of the restricted character set and also [recoverable](#33-recovery). Farcaster does not mandate the usage of an fname, and users are free to use alternate namespaces with their `fids`.
 
+Giving up a username does not affect sufficient decentralization. Farcaster is designed around the fid and every message and action points to it. Fnames can be changed at any time without losing a single follower or cast. A user who gives up one name can purchase another and continue using the app, or even elect not to have an fname and just use their fid.
+
 #### Username Policy
 
 Usernames are free to register during beta and are governed by a simple policy. The policy aims to prevent names from being squatted by inactive users or used maliciously to impersonate others. A solution to this problem cannot be easily automated and requires human judgment to enforce (for now). The username policy has two central tenets:
@@ -150,16 +152,14 @@ We expect that human intervention is often needed since there can be reasonable 
 
 If the answer to most of these questions is yes, they will retain claim to their name. While on testnet, the core team will arbitrate such conflicts and we expect to formalize a governance system around this as we approach mainnet. Users will not be refunded if a name is reclaimed as a result of arbitration. 
 
-Importantly, giving up a username does not affect sufficient decentralization. Farcaster is designed around the fid and every message and action points to it. Fnames can be changed at any time without losing a single follower or cast. A user who gives up one name can purchase another and continue using the app, or even elect not to have an fname and just use their fid.
-
 
 ## 3.3 Recovery
 
-Farcaster IDs and nNames are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer.
+Farcaster IDs and Names are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer.
 
 Users can set the recovery address to another address in their wallet, a multi-sig shared with friends, or a third-party recovery service. Users can also change the recovery address at any time. Ownership remains decentralized because the recovery address cannot make a transfer that the custody address does not approve.
 
-Transferring the asset to a new custody address must unset the recovery address. Otherwise, users may purchase a name on OpenSea only to have the previous owner claim it back stealthily with their recovery address.
+Transferring the asset to a new custody address will unset the recovery address. Otherwise, users may purchase a name on OpenSea only to have the previous owner claim it back stealthily with their recovery address.
 
 # 4. Replication
 
