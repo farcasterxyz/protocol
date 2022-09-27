@@ -26,7 +26,7 @@
 6. [Releases](#6-releases)
    1. [Hub Releases](#61-hub-releases)
    2. [Contract Releases](#62-contract-releases)
-   3. [Protoocl Releases](#63-protocol-releases)
+   3. [Protocol Releases](#63-protocol-releases)
 7. [Security Considerations](#7-security-considerations)
    1. [Signer Compromise](#71-signer-compromise)
    2. [Eclipse Attacks](#72-eclipse-attacks)
@@ -46,9 +46,9 @@ Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022
 
 Farcaster achieves sufficient decentralization through a hybrid architecture with on-chain and off-chain components.
 
-User identities are stored on-chain in an Ethereum smart contract to leverage Ethereum's robust security, composability, and consistency guarantees. An Ethereum address controls this on-chain identity and can be used to sign off-chain messages on its behalf.
+Identities are stored on-chain in an Ethereum smart contract to leverage Ethereum's robust security, composability, and consistency guarantees. An Ethereum address controls this on-chain identity and can be used to sign off-chain messages on its behalf.
 
-User data is then cryptographically signed by the identity and stored off-chain on user-controlled servers called Farcaster Hubs. Data is not stored on-chain because it would be prohibitively expensive and slow to settle on most L1 and L2 networks.
+Data is cryptographically signed by an identity and stored off-chain on user-controlled servers called Farcaster Hubs. Data is not stored on-chain because it would be prohibitively expensive and slow to settle on most L1 and L2 networks.
 
 <!-- Diagram covering the major architectural concepts  -->
 
@@ -79,7 +79,7 @@ type SignedMessage = {
 };
 ```
 
-A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid keypair, like the custody address. The **envelope** contains the hash, signature, and the public key of the signing keypair, which any recipient can use to validate that the fid signed the message.
+A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid key-pair, like the custody address. The **envelope** contains the hash, signature, and the public key of the signing key-pair, which any recipient can use to validate that the fid signed the message.
 
 The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an fid to look up the custody address on-chain and a timestamp for ordering.
 
@@ -105,43 +105,60 @@ Conceptually, Hubs form an **L2 network for storing social data**, though the ne
 
 # 3. Identity
 
-The identity system ensures secure and decentralized ownership of user accounts. Users must be able to set up a new account without any third-party approval. It should also be reasonably quick and cheap, which we define as being able to sign up in under a minute and for less than $10. The system should also ensure that most accounts are trustworthy and operated by honest, active users.
+The Farcaster Identity system must ensure that user accounts:
 
-Farcaster's Identity System is separated into two on-chain contracts - a **Farcaster ID Registry (FIR)**, which issues new id numbers called `fids`, and a **Farcaster Name Registry (FNR)** which issues new usernames called `fnames`.
+1. Can be owned in a secure, decentralized manner
+2. Are easy to recognize visually when using a social network
+3. Are quick and easy to set up (< 1 minute of work, ~ 10 USD)
+4. Are recoverable if lost, without compromising decentralization.
+
+These goals are challenging to achieve within an identity system because they are often in conflict. For instance, having a decentralized and trustworthy namespace is hard. A fully decentralized namespace could not prevent an early user from squatting `@elonmusk`, and a heavily squatted namespace is not very useful.
+
+Farcaster balances these goals with two separate systems - a **Farcaster ID Registry (FIR)**, which issues new id numbers called `fids`, and a **Farcaster Name Registry (FNR)**, which issues new usernames called `fnames`. Fids are secure, decentralized identifiers present in every message that are conceptually similar to uuids. Fnames, on the other hand, are primarily cosmetic modifiers that replace the fid at render time and can be changed at any time. The separation of an identity into these two components allows us to achieve our goals at the cost of adding some complexity to the system. Both systems also implement a recovery mechanism that protects against loss of the key-pair controlling the name without compromising decentralization.
 
 ## 3.1 Farcaster ID Registry (FIR)
 
-An account is created by calling `register` on the ID Registry from a user-controlled Ethereum address. The contract issues a new fid to this address. The fid can be transferred between addresses, though the contract ensures that an address owns only one fid at a time.
+Farcaster ID's are numeric identifiers that are spiritually similar to uuids. When displayed to a user they are presented with a preceding exclamation point (e.g. `!8098`).
 
-Farcaster IDs start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. An fid is represented with a uint256 which guarantees a practically infinite supply since it can be incremented to ~ 10^77.
+An fid represents a unique entity, like a person or organization. Every message or follow that references the entity must do so by using its fid and not its fname. The fid costs a small amount of gas to register and is owned for life. The FID contract is straightforward and cannot be upgraded or modified in any way, ensuring that fids are maximally decentralized.
 
-Users can configure a _home_, which is the URL of the Hub they use to upload their messages. Other Hubs that want to replicate the user's data can always find it at this location. It is an optional property that is emitted as an on-chain event, and can be set during registration or any time later.
+Fids start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. An fid is stored on-chain as a uint256 which guarantees a near infinite supply since it can be incremented to ~ 10^77. Fids can be transferred between addresses, though the FIR ensures that an address owns only one fid at a time.
+
+Users can use the FIR to configure a _Home URL_ which can be used to find the location of their off-chain messages. Typically this is set to the Hub that the user uploads their data to and helps with discovery. It is optional and emitted as an on-chain event.
 
 ## 3.2 Farcaster Name Registry (FNR)
 
-A Farcaster Name or `fname` like `@alice` can be minted from the Farcaster Name Registry and attached to an fid.
+Farcaster Names are unique, 16 character alphanumeric names similar to usernames on other networks. When displayed to a user, they are presented with a preceding at-symbol (e.g. `@alice`).
 
-When minting a name, the contract checks that the name is unique and contains at most 16 alphanumeric characters or dashes `^[a-zA-Z0-9-]{1,16}$`. The single dash (-) fname is reserved for a system account and will not be claimable. The mint happens over a two-phase commit reveal to prevent front-running registrations.
+An fname, along with a profile picture, display name and verification marks, help visually identify an entity when browsing a network. Unlike fids, fnames are mainly cosmetic and have no bearing on the underlying data created by the user. Ownership of an fname is not permanent and users must pay a yearly renewal fee set by governance. Renewals can be made up to 90 days before an fname expires. Expired names are auctioned in a Dutch Auction where bidders must pay the yearly fee plus a premium which starts at 1000 ETH. The premium decreases by 10% every 8 hours until it reaches 0 ETH.
 
-Fnames are ERC-721 tokens that are fully composable with the NFT ecosystem. While users can use ENS names with the protocol, Fnames have some properties that make them more practical. Fnames are cheaper to mint and are [recoverable](#33-recovery) if the address holding them is lost. They are also less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) and more straightforward to display because of the restricted length and character set.
+Fnames are issued as NFT's by the Farcaster Name Registry on a first-come-first-serve basis. Each name must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. They have specific properties that make them useful in a social network relative to other namespaces like ENS. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) because of the restricted character set and also [recoverable](#33-recovery). Farcaster does not mandate the usage of an fname, and users are free to use alternate namespaces with their `fids`.
 
-The FNR charges a yearly fee of 0.01 ETH for owning an fname at the beginning of the year on January 1st. Users 30-day grace period to renew their subscription after which their ownership over the name expires. During mint, the fee is pro-rated for the year ending December 31st. Fees are collected by the Farcaster Treasury and are used to support protocol development.
+Giving up a username does not affect sufficient decentralization. Farcaster is designed around the fid and every message and action points to it. Fnames can be changed at any time without losing a single follower or cast. A user who gives up one name can purchase another and continue using the app, or even elect not to have an fname and just use their fid.
 
-Fnames can be minted freely but are subject to two policies enforced by governance:
+#### Username Policy
 
-1. A _prior ownership_ claim can be made by a user who owns a name on at least two major social media platforms if the current owner does not own the name on any major social media platforms.
+Usernames are free to register during beta and are governed by a simple policy. The policy aims to prevent names from being squatted by inactive users or used maliciously to impersonate others. A solution to this problem cannot be easily automated and requires human judgment to enforce (for now). The username policy has two central tenets:
 
-2. An _impersonation claim_ can be made if someone is impersonating or misleading users. It will be investigated by a group of moderators elected by the community through a governance vote.
+1. **Impersonation** - If you register a username that belongs to a well-known public person or entity, your name may be deregistered. e.g. `@elonmusk`, `@vitalikbuterin`, `@google` or `@whitehouse`.
 
-Names that expire or are subject to a claim are moved back into the Farcaster Treasury. The treasury can choose to transfer ownership to someone with ownership claims or auction them to the highest bidder. For impersonation claims, any previously paid fees are forfeit.
+2. **Inactivity** — If you’re not actively using a username for 60+ days, your name may be de-registered on request from another user, or at our discretion.
+
+We expect that human intervention is often needed since there can be reasonable conflicts. For instance, you register `@vitalik` and Vitalik Buterin signs up after you and wants the name. In such a case, we would ask three questions that guide the decision:
+
+- Is the user active and engaged on Farcaster? (e.g. if they have made high-quality posts in the last few months)
+- Does the user have a reasonable claim to the name? (e.g. if their name is also Vitalik)
+- Does the user hold similar, active handles on other networks? (e.g. if they own vitalik on twitter and vitalik.ens)
+
+If the answer to most of these questions is yes, they will retain claim to their name. While on testnet, the core team will arbitrate such conflicts and we expect to formalize a governance system around this as we approach mainnet. Users will not be refunded if a name is reclaimed as a result of arbitration.
 
 ## 3.3 Recovery
 
-Farcaster IDs and names are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer.
+Farcaster IDs and Names are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer.
 
 Users can set the recovery address to another address in their wallet, a multi-sig shared with friends, or a third-party recovery service. Users can also change the recovery address at any time. Ownership remains decentralized because the recovery address cannot make a transfer that the custody address does not approve.
 
-Transferring the asset to a new custody address must unset the recovery address. Otherwise, users may purchase a name on OpenSea only to have the previous owner claim it back stealthily with their recovery address.
+Transferring the asset to a new custody address will unset the recovery address. Otherwise, users may purchase a name on OpenSea only to have the previous owner claim it back stealthily with their recovery address.
 
 # 4. Replication
 
@@ -201,7 +218,7 @@ type CastShortTextBody = {
 };
 ```
 
-Short Text Casts can be represented as a series of trees, where each root is a Cast or URI, and each node is a Cast. This is a useful property for threading, since there is a determinstic order to how messages should be displayed in the UI during a back and forth conversation. It is impossible to break such a tree by introducing a cycle because of the requirement that every node must be hashed and signed before a child can reference it. If the parent or child attempts to change their `parentUri` after finalization, their hash changes making them a distinct node in the tree.
+Short Text Casts can be represented as a series of trees, where each root is a Cast or URI, and each node is a Cast. This is a useful property for threading, since there is a deterministic order to how messages should be displayed in the UI during a back and forth conversation. It is impossible to break such a tree by introducing a cycle because of the requirement that every node must be hashed and signed before a child can reference it. If the parent or child attempts to change their `parentUri` after finalization, their hash changes making them a distinct node in the tree.
 
 <!-- Diagram of a Set of Short Text Casts -->
 
@@ -416,7 +433,7 @@ The first type of verification supported is a self-authenticating proof of owner
 
 ## 4.4 Metadata
 
-_This section is still under development and will cover a CRDT for allowing arbitrary metdata to be added to a user's account like a display name or profile picture._
+_This section is still under development and will cover a CRDT for allowing arbitrary metadata to be added to a user's account like a display name or profile picture._
 
 ## 4.5 Signer Authorizations
 
@@ -424,7 +441,7 @@ _This section is still under development._
 
 A _Signer Authorization_ is a message that authorizes a new key pair to generate signatures for a Farcaster account.
 
-When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this keypair into every device since it increases the risk of account compromise. The custody address, also known as the _Custody Signer_, can authorize other keypairs known as _Delegate Signers_. Unlike Custody Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
+When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this key-pair into every device since it increases the risk of account compromise. The custody address, also known as the _Custody Signer_, can authorize other key-pairs known as _Delegate Signers_. Unlike Custody Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
 
 ```ts
 type SignerAuthorizationMessage = {
@@ -474,7 +491,7 @@ _This section is still under development and covers the peer discovery mechanism
 
 Farcaster is intended to be a long-lived protocol and built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers. Users are expected to be on the latest release soon after it comes out.
 
-The versioning system reflects this and notably does not folow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases increment the patch version. So a successful first release would bump the verison to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`.
+The versioning system reflects this and notably does not follow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases increment the patch version. So a successful first release would bump the version to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`.
 
 ## 6.1 Hub Releases
 
@@ -518,7 +535,7 @@ gantt
 
 Contracts that are upgradable will be updated on an as-needed basis, and we expect this to be extremely rare. Unlike Hubs, contracts do not follow any pre-determined release schedule. If a contract is not dependent on any hub changes it can be deployed at any time. If it is dependent on hub changes, the hub release must ship and the 4 week waiting period must pass before the contract can be safely deployed.
 
-Contract versions are set to the version of the hub they depend on, or the most recent release if they are not dependent on any specific version. The version is also tracked in the Solidity class name to keep track of upgrades. So the first version would be `IDRegistry_2`, while an upgrade made after Hub `v2.1.1` would be called `IDRegistry_2_1_1`.
+Contract versions are set to the version of the hub they depend on, or the most recent release if they are not dependent on any specific version. The version is also tracked in the Solidity class name to keep track of upgrades. So the first version would be `IdRegistry_2`, while an upgrade made after Hub `v2.1.1` would be called `IdRegistry_2_1_1`.
 
 ## 6.3 Protocol Releases
 
@@ -540,7 +557,7 @@ A flooding attack is when a malicious user keeps acquiring new accounts and broa
 
 ## 7.4 DDOS Attacks
 
-A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitimate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require aggressive mitigations like whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.
+A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitimate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.
 
 ## 7.5 Replay Attacks
 
