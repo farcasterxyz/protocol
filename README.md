@@ -207,7 +207,7 @@ A _Cast_ is a public message created by a user that is displayed on their profil
 
 ### 4.1.1 Short Text Casts
 
-A _Short Text Cast_ is a 280 character public message created by an account. It can stand on its own or as a reply if `parentUri` points to another cast, on-chain item or URL. When deleted, a Short Text Cast should be soft-deleted and its content removed, but its replies are still considered valid and can be displayed to the user.
+A _Short Text Cast_ is a 500 character public message created by an account. It can stand on its own or as a reply if `parentUri` points to another cast, on-chain item or URL. When deleted, a Short Text Cast should be soft-deleted and its content removed, but its replies are still considered valid and can be displayed to the user.
 
 ```ts
 type CastShortTextBody = {
@@ -225,7 +225,7 @@ Short Text Casts can be represented as a series of trees, where each root is a C
 #### Message Validation
 
 1. `schema` must be known.
-2. `text` must contain <= 280 valid unicode characters,
+2. `text` must contain <= 500 valid unicode characters,
 3. `parentUri` must be a valid Farcaster Cast URI and must not reference this message.
 
 #### Set Construction
