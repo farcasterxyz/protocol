@@ -203,107 +203,78 @@ All messages must pass the following validations in addition to specific validat
 
 ## 4.1 Casts
 
-A _Cast_ is a public message created by a user that is displayed on their profile. It can contain text and links to media, on-chain activity or other casts. Users are allowed to delete casts at any time. Casts come in several different flavors and the protocol can be extended to support many more types in the future. Each type has its own replication mechanisms which are defined below.
+A _Cast_ is a public message created by a user which contains text and can also embed media, on-chain activity or evens other casts. Casts are stored in a two-phase set CRDT[^two-phase-set] that handles conflict resolution.
 
-### 4.1.1 Short Text Casts
+A Cast can be added with a `CastAdd` message which is placed in the CRDT's **add-set**. Each cast is indexed by its hash which is guaranteed to be unique unless the casts are identical. By extension, two add messages can never conflict unless they are identical, in which case one can be discarded safely. 
 
-A _Short Text Cast_ is a 320 character public message created by an account. It can stand on its own or as a reply if `parentUri` points to another cast, on-chain item or URL. When deleted, a Short Text Cast should be soft-deleted and its content removed, but its replies are still considered valid and can be displayed to the user.
+A Cast can be removed with a `CastRemove` message which contains a reference to the target `CastAdd`'s hash. When received, the target is removed from the add-set if present and the remove is added to the rem-set. Conflicts between adds and removes are handled with Remove-Wins runes and conflicts between removes are handled with Last-Write-Wins rules, falling back to lexicographical ordering in case of a tie.
+
+### 4.1.1 Add Messages
+
+A _Cast Add_ can contain up to 320 characters of unicode text and two URI's that can have up to 256 characters. Clients are responsible for unpacking and rendering the URI's along with the text. 
 
 ```ts
-type CastShortTextBody = {
-  embed: Embed;
+type CastAddMessage = {
+  embed: {
+    items: URI[];
+  },
+  parent?: URI;
   text: string;
-  schema: 'farcaster.xyz/schemas/v1/cast-short-text';
-  parentUri?: URI;
 };
 ```
 
-Short Text Casts can be represented as a series of trees, where each root is a Cast or URI, and each node is a Cast. This is a useful property for threading, since there is a deterministic order to how messages should be displayed in the UI during a back and forth conversation. It is impossible to break such a tree by introducing a cycle because of the requirement that every node must be hashed and signed before a child can reference it. If the parent or child attempts to change their `parentUri` after finalization, their hash changes making them a distinct node in the tree.
+A cast without a `parent` is a top-level cast, which clients should display on the user's profile or timeline. A cast with a `parent` is a reply to another cast, web URL or on-chain object which should be displayed in a thread.
 
-<!-- Diagram of a Set of Short Text Casts -->
+Casts form a series of trees where each root is a Cast or URI and each child node is a reply cast. Each tree can be rendered as a thread in the UI. Trees are guaranteed to be acyclic because a parent must be hashed and signed before a child can point to it. A parent that changes its parent to point to a child will change its hash and break its relationship with the child.
 
-#### Message Validation
+```mermaid
+graph TB 
+    A((1))-->B((2))
+    A-->C((3))
+    A-->D((4))
+    B-->E((5))
+    B-->F((6))
+    B-->G((7))
+    C-->H((8))
+```
 
-1. `schema` must be known.
-2. `text` must contain <= 320 valid unicode characters,
-3. `parentUri` must be a valid Farcaster Cast URI and must not reference this message.
+A Cast message must pass the following validation steps:
 
-#### Set Construction
+1. `text` must contain <= 320 valid unicode characters
+2. `embed` must contain between 0 and 2 `items`
+3. `item` must be a URI of at most 256 characters
+4. `parent`, if present, must be a valid URI not equal to this message's URI
 
-Short Text Casts for a user are stored in a two-phase set CRDT[^two-phase-set], which contains an **add-set** that stores additions and a **rem-set** which stores [removes](#4). An addition is performed with a `CastShortTextBody` message, while a remove is performed with a `CastRemove`.
+### 4.1.2 Remove Messages
 
-When an addition message `c` is received:
+A _Cast Remove_ only contains a reference to the hash of the _Cast Add_. It allows for permanent deletion of casts while eliding the data of the original cast.
 
-1. If there exists `r` in the rem-set such that `r.targetCastHash` equals `c.hash`, discard `c`
-2. Otherwise, add `c` into the add-set.
+```ts
+type CastRemoveBody = {
+  hash: string;
+};
+```
+
+The message must pass the following validation steps: 
+
+1. `message.data.body.hash` must not equal the `message.envelope.hash`.
+2. `message.timestamp` must be <= system clock + 10 minutes
+3. `message.data.fid` must be a known fid in the FIR
+
+### 4.1.3 Merge Rules 
+
+When an add message `a` is received:
+
+1. If there exists `r` in the rem-set such that `r.data.body.hash` equals `a.hash`, discard `a`
+2. Otherwise, add `a` into the add-set.
 
 When a remove message `r` is received:
 
-1. If there is an `a` in the add-set where `a.hash` equals `d.targetCastHash`, delete it.
-2. If there is an `r` in the rem-set where `r.targetCastHash` equals `d.targetCastHash`
-   - If `r > d`, discard `d`
-   - If `r < d`, delete `r` and add `d` into the rem-set
-3. Otherwise, add `d` to the rem-set.
-
-### 4.1.2 Recasts
-
-A _Recast_ expresses an intent to share another cast. An account can recast any cast, including its own, but may not recast the same cast multiple times.
-
-```ts
-type CastRecast = {
-  targetCastUri: URI;
-  schema: 'farcaster.xyz/schemas/v1/cast-recast';
-};
-```
-
-#### Message Validation
-
-1. `schema` must be known.
-2. `targetCastUri` must be a valid Farcaster Cast URI and must not reference this message.
-
-#### Set Construction
-
-Recasts can be stored using a two-phase set just like Short Text Casts. The remove operation is identical, while the addition operation is performed with `CastRecast`, and has one additional rule:
-
-1. If there is a CastRecast `a` in the add **add-set** with the same `targetCastUri` and `fid` as the incoming CastRecast `rc`:
-   - If `a > rc`, discard `d`
-   - If `a < rc`, delete `a` and add `rc` into the rem-set
-
-### 4.1.3 Remove Messages
-
-A remove instructs the set to remove a previously created cast. It is a type of soft delete where the content of the message is removed but its hash is retained forever. A user who has a copy of the remove message can prove that the message was posted at some point by the author.
-
-```ts
-type CastRemove = {
-  targetCastHash: string;
-  schema: 'farcaster.xyz/schemas/v1/cast-remove';
-};
-```
-
-The remove message must contain the hash of the cast being removed and omit all the other properties. The set can then remove the cast and its contents from the network, which is desirable from a user perspective. The set ensures that the remove message does not reference itself, and that it is only applied as a remove operation if it has a timestamp higher than that of the message it references. The rules for validation are described below, but the rules for merging are specified in each set that implements the remove operation.
-
-<!-- Diagram showing the remove operations -->
-
-**Validation**
-
-1. `schema` must be known.
-2. `targetCastHash` must not equal the `hash` of this message.
-3. `timestamp` must be <= system clock + 1 hour
-4. `fid` must be a known fid in the FIR
-
-### 4.1.4 Embeds
-
-An _Embed_ is a data structure that can attach Farcaster URI's to a Cast, which clients can choose to preview when displaying the message.
-
-```ts
-type Embed = {
-  items: URI[];
-};
-```
-
-**Validation**
-
-1. Every item in `items` must be a valid Farcaster URI
+1. If there is an `a` in the add-set where `a.hash` equals `r.data.body.hash`, delete it.
+2. If there is an `r'` in the rem-set where `r.data.body.hash` equals `r'.data.body.hash`
+   - If `r' > r`, discard `r'`
+   - If `r' < r`, delete `r` and add `r'` into the rem-set
+3. Otherwise, add `r` to the rem-set.
 
 ## 4.2 Actions
 
@@ -528,7 +499,6 @@ gantt
     section Mainnet
     v2.1.0      :2014-03-31, 8w
     v2.0.0      :done, a1, 2014-01-05  , 16w
-
 ```
 
 ## 6.2 Contract Releases
