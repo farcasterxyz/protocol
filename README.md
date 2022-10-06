@@ -229,13 +229,18 @@ Casts form a series of trees where each root is a Cast or URI and each child nod
 
 ```mermaid
 graph TB 
-    A((1))-->B((2))
-    A-->C((3))
-    A-->D((4))
-    B-->E((5))
-    B-->F((6))
-    B-->G((7))
-    C-->H((8))
+    A([cast:0x...k8j])-->B([cast:0x...ce8])
+    A-->C([cast:0x...f2b])
+    B-->D([cast:0x...c8e])
+    B-->E([cast:0x...48b])
+    B-->F([cast:0x...231])
+    C-->G([cast:0x...981])
+
+    
+    H(url:www.google.com/foo)-->I([cast:0x...14d])
+    H-->J([cast:0x...38d])
+    J-->K([cast:0x...ba4])
+    J-->L([cast:0x...dc1])
 ```
 
 A Cast message must pass the following validation steps:
