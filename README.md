@@ -205,19 +205,19 @@ All messages must pass the following validations in addition to specific validat
 
 A _Cast_ is a public message created by a user which contains text and can also embed media, on-chain activity or other casts. Casts are stored in a two-phase set CRDT[^two-phase-set] that resolves conflicts between messages.
 
-A Cast can be added with a `CastAdd` message which is placed in the CRDT's **add-set**. Each cast is indexed by its hash which is guaranteed to be unique unless the casts are identical. By extension, two add messages can never conflict unless they are identical, in which case one can be discarded safely. 
+A Cast can be added with a `CastAdd` message which is placed in the CRDT's **add-set**. Each cast is indexed by its hash which is guaranteed to be unique unless the casts are identical. By extension, two add messages can never conflict unless they are identical, in which case one can be discarded safely.
 
 A Cast can be removed with a `CastRemove` message which contains a reference to the target `CastAdd`'s hash. When received, the target is removed from the add-set if present and the remove is added to the **rem-set**. Conflicts between adds and removes are handled with Remove-Wins rules and conflicts between removes are handled with Last-Write-Wins rules, falling back to lexicographical ordering in case of a tie.
 
 ### 4.1.1 Add Messages
 
-A _Cast Add_ can contain up to 320 characters of unicode text and two URI's that can have up to 256 characters. Clients are responsible for unpacking and rendering the URI's along with the text. 
+A _Cast Add_ can contain up to 320 characters of unicode text and two URI's that can have up to 256 characters. Clients are responsible for unpacking and rendering the URI's along with the text.
 
 ```ts
 type CastAddBody = {
   embed: {
     items: URI[];
-  },
+  };
   parent?: URI;
   text: string;
 };
@@ -228,7 +228,7 @@ A cast without a `parent` is a top-level cast, which clients should display on t
 Casts form a series of trees where each root is a Cast or URI and each child node is a reply cast. Each tree can be rendered as a threaded conversation. Trees are guaranteed to be acyclic because a parent must be hashed and signed before a child can point to it. Any change to the parents data will break all relationships with its children.
 
 ```mermaid
-graph TB 
+graph TB
     A([cast:0x...k8j])-->B([cast:0x...ce8])
     A-->C([cast:0x...f2b])
     B-->D([cast:0x...c8e])
@@ -236,7 +236,7 @@ graph TB
     B-->F([cast:0x...231])
     C-->G([cast:0x...981])
 
-    
+
     H(url:www.google.com/foo)-->I([cast:0x...14d])
     H-->J([cast:0x...38d])
     J-->K([cast:0x...ba4])
@@ -260,13 +260,13 @@ type CastRemoveBody = {
 };
 ```
 
-The message must pass the following validation steps: 
+The message must pass the following validation steps:
 
 1. `message.data.body.hash` must not equal the `message.envelope.hash`.
 2. `message.timestamp` must be <= system clock + 10 minutes
 3. `message.data.fid` must be a known fid in the FIR
 
-### 4.1.3 Merge Rules 
+### 4.1.3 Merge Rules
 
 When an add message `a` is received:
 
