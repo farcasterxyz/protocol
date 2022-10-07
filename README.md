@@ -19,7 +19,7 @@
    2. [Actions](#42-actions)
    3. [Verifications](#43-verifications)
    4. [Metadata](#44-metadata)
-   5. [Signer Authorizations](#45-signer-authorizations)
+   5. [Signers](#45-signers)
    6. [Custody Signer Revocations](#46-root-signer-revocations)
    7. [Sharding](#47-sharding)
 5. [Peering](#5-peering)
@@ -197,7 +197,7 @@ All messages must pass the following validations in addition to specific validat
 
 1. `message.timestamp` is not more than 1 hour ahead of system time.
 2. `message.fid` must be a known fid number in the FIR.
-3. `signerPubKey` should be a valid [Custody Signer or Delegate Signer](#45-signer-authorizations) for `message.fid`
+3. `signerPubKey` should be a valid [Signer](#45-signers) for `message.fid`
 4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization.
 5. `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
 
@@ -277,8 +277,8 @@ When a remove message `r` is received:
 
 1. If there is an `a` in the add-set where `a.hash` equals `r.data.body.hash`, delete it.
 2. If there is an `r'` in the rem-set where `r.data.body.hash` equals `r'.data.body.hash`
-   - If `r' > r`, discard `r'`
-   - If `r' < r`, delete `r` and add `r'` into the rem-set
+   - If `r' >= r`, discard `r`
+   - If `r' < r`, delete `r'` and add `r` into the rem-set
 3. Otherwise, add `r` to the rem-set.
 
 ## 4.2 Actions
@@ -411,47 +411,87 @@ The first type of verification supported is a self-authenticating proof of owner
 
 _This section is still under development and will cover a CRDT for allowing arbitrary metadata to be added to a user's account like a display name or profile picture._
 
-## 4.5 Signer Authorizations
+## 4.5 Signers
 
-_This section is still under development._
+A _Signer_ is a key-pair that can sign messages on behalf of an fid. Conceptually, Signers are like OAuth tokens that allow the holder to post messages on an fid's behalf.
 
-A _Signer Authorization_ is a message that authorizes a new key pair to generate signatures for a Farcaster account.
+An fid can create a Signer by constructing a `SignerAdd` message and signing it with its custody address. The Signer, which can be controlled by the user or a third-party client, can sign most types of Farcaster messages. Signers enable a secure application model where users can temporarily authorize apps to send messages on their behalf without giving up control over their fid. If the app is compromised, its Signer can be revoked by the custody address. All messages signed by the Signer will be discarded.
 
-When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this key-pair into every device since it increases the risk of account compromise. The custody address, also known as the _Custody Signer_, can authorize other key-pairs known as _Delegate Signers_. Unlike Custody Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
+Signers are considered active only if they were authorized by the current custody address. If the user moves the fid to a new custody address, all previous Signer messages are considered invalid and the Signers must be reauthorized. All Farcaster Messages must contain a signature from a Signer associated with the current custody address which must be an Ed25519[^ed25519] key-pair. The only exception are Signer Messages, which must be signed by the custody address which can only produce an ECDSA secp256k1 signature.
+
+```mermaid
+graph TD
+    Custody1([Custody Address 1]) -.-> SignerA([Signer KeyPair A])
+    Custody1 -.->  SignerB([Signer KeyPair B])
+    style Custody1 stroke-dasharray: 5 5
+    style SignerA stroke-dasharray: 5 5
+    style SignerB stroke-dasharray: 5 5
+
+    Custody2([Custody Address 2]) --> SignerA1([Signer KeyPair A])
+    Custody2 -->  |ECDSA Signature|SignerC([Signer KeyPair C])
+    SignerC -->  CastA[Cast]
+    SignerC -->  |EdDSA Signature| CastB[Cast]
+    SignerA1 -->  CastC[Cast]
+    SignerA1 -->  CastD[Follow]
+```
+
+The SignerSet is a data structure that keeps track of active signers for a given fid. It keeps track of signers by using a two-phase set for every known custody address for the fid. It also maintains a connection to the FIR to track changes to the custody address.
+
+A Signer is added with a `SignerAdd` message which places the key in the CRDT's **add-set**, if the signing custody address is known. Otherwise, a new two-phase set is created for the custody address and the message is placed in its **add-set**. Conflicts between `SignerAdds` are resolved using Last-Write-Wins rules, and lexicographical ordering if the timestamps are identical.
+
+The SignerSet keeps track of the current custody address and marks its two-phase set as active. When queried for signers, it only returns public keys that are in the add-set of this two-phase set and ignores others. Any transfer of the fid on-chain to a new custody address would change the active set.
+
+A Signer can be removed with a `SignerRemove` message which places the key in the **rem-set** and removes it from the **add-set** if present. Conflicts betweens removes and across adds and removes are handled with Last-Write-Wins rules, followed by Remove-Wins rules, and finally lexicographical ordering for tie breaking.
+
+### 4.5.1 Signer Adds
+
+A `SignerAdd` contains the public key of the EdDSA key pair and an unstructured application id value, which can be used by users to store arbitrary data about the key pair.
 
 ```ts
-type SignerAuthorizationMessage = {
-  fid: number;
-  active: boolean;
-  authorizedPublicKey: string;
-  schema: 'farcaster.xyz/schemas/v1/signer';
+type SignerAddBody = {
+  pubKey: string;
+  appId?: string;
 };
 ```
 
-Custody Signers generate ECDSA signatures on the secp256k1 curve and can only publish Signer Authorization messages. All other types of messages must be signed by Delegate Signers, which creates EdDSA signatures on Curve25519[^ed25519]. Delegate Signers can be used to authorize new devices or even third-party services to sign messages for an account. If a Delegate Signer is compromised, it can be revoked by itself, an ancestor in its chain of trust, or any Custody Signer. When a Signer is revoked, Hubs discard all of its signed messages because there is no way to tell the user's messages from the attackers.
+A SignerAdd message must pass the following validation steps:
 
-Users might also transfer an fid to a new custody address due to key recovery or changing wallets. It is usually desirable to preserve history and therefore both custody addresses become valid Custody Signers. The set of valid signers for an fid form a series of distinct trees. Each tree's root is a historical custody address, and the leaves are delegate signers.
+1. `pubKey` must match the regular expression `^0x[a-fA-F0-9]{40}$`
+2. `appId` must be <= 32 chars
 
-<!-- Diagram of Signer Tree -->
+### 4.5.2 Signer Removes
 
-The Signer Set is a modified two-phase set with remove-wins and last-write-wins semantics. New messages are added to the set if signed by a valid delegate or custody signer. A remove message is accepted if signed by itself or by an ancestor. A Signer can never be re-added once removed, and all of its descendant children and messages are discarded.
-
-A Set conflict can occur if two valid Signers separately authorize the same Delegate Signer, which breaks the tree data structure. If this occurs, the Set retains the message with the highest timestamp and lexicographical hash, in that order.
-
-## 4.6 Custody Signer Revocations
-
-_This section is still under development._
-
-A Custody Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an fid.
-
-A revocation must include the blockhash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid custody signer. All previous custody addresses and delegate signers issued by them are invalidated.
+A `SignerRemove` contains the publicKey of the EdDSA key-pair that is to be removed
 
 ```ts
-type RootRevocationBody = {
-  blockHash: string;
-  schema: 'farcaster.xyz/schemas/v1/root-revocation';
+type SignerRemoveBody = {
+  pubKey: string;
 };
 ```
+
+A SignerAdd message must pass the following validation steps:
+
+1. `pubKey` must match the regular expression `^0x[a-fA-F0-9]{40}$`
+
+### 4.5.3 Merge Rules
+
+When an add message `a` is received:
+
+1. If there exists `r` in the rem-set such that `r.data.body.pubKey` equals `a.data.body.pubKey`, discard `a`
+2. If there is an `a'` in the add-set where `a'.data.body.pubKey` equals `a.data.body.pubKey`
+   - If `a' >= a`, discard `a`
+   - If `a' < a`, delete `a'` and add `a` into the add-set
+3. Otherwise, add `a` into the add-set.
+
+When a remove message `r` is received:
+
+1. If there is an `a` in the add-set where `a.data.body.pubKey` equals `r.data.body.pubKey`, delete `a`.
+2. If there is an `r'` in the rem-set where `r.data.body.pubKey` equals `r'data.body.pubKey`
+   - If `r' >= r`, discard `r`
+   - If `r' < r`, delete `r'` and add `r` into the rem-set
+3. Otherwise, add `r` to the rem-set.
+
+When a transfer event `t` is received from IdRegistry:
 
 ## 4.7 Sharding
 
