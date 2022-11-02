@@ -199,7 +199,7 @@ All messages must pass the following validations in addition to specific validat
 2. `message.fid` must be a known fid number in the FIR.
 3. `signerPubKey` should be a valid [Custody Signer or Delegate Signer](#45-signer-authorizations) for `message.fid`
 4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization.
-5. `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
+5. `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` must pass.
 
 ## 4.1 Casts
 
