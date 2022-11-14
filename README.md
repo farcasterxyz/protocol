@@ -56,7 +56,7 @@ Data is cryptographically signed by an identity and stored off-chain on user-con
 
 A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. Individuals can operate several accounts simultaneously, like a real-name account and a company account.
 
-Each account has by a unique number associated with it called a Farcaster ID or an `fid`. Farcaster IDs can be obtained by calling the _Farcaster ID Registry (FIR)_ from an Ethereum address. This address is known as the `custody address` and can sign off-chain and on-chain messages on behalf of the account. Users can optionally acquire a Farcaster Name or `fname` from the _Farcaster Name Registry (FNR)_ which issues it a unique name like `@alice`.
+Each account has a unique number associated with it called a Farcaster ID or an `fid`. Farcaster IDs can be obtained by calling the _Farcaster ID Registry (FIR)_ from an Ethereum address. This address is known as the `custody address` and can sign off-chain and on-chain messages on behalf of the account. Users can optionally acquire a Farcaster Name or `fname` from the _Farcaster Name Registry (FNR)_ which issues it a unique name like `@alice`.
 
 ## 2.2 Signed Messages
 
