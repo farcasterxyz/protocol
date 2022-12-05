@@ -5,7 +5,8 @@
 ## Table of Contents
 
 1. [Introduction](#1-introduction)
-   1. [Problems](#11-problems)
+   1. [Prior Art](#11-prior-art)
+   2. [Proposal](#12-proposal)
 2. [Identity](#3-account-contracts)
    1. [Farcaster ID Registry (FIR)](#31-farcaster-id-registry-fir)
    1. [Farcaster Name Registry (FNR)](#32-farcaster-name-registry-fnr)
@@ -39,25 +40,33 @@
 
 ## 1. Introduction
 
-Interactions between people increasingly happens through social media platforms, which influence how we view our friends, our colleagues and the world around us. Modern social networks are trusted third parties that perform three important functions: they help users establish an identity recognizable to their peers, collect updates from billions of users and distribute them through user-friendly applications.
+Social media is increasingly becoming the the lens through which our society perceives the world around it. It shapes our views about our friends, colleagues, and current events in the world around us. Social media companies are trusted third-parties that perform three important functions: they help each user establish an identity recognizable to their peers, collect updates from billions of users and distribute them via user-friendly applications. 
 
-Platforms direct the flow of information by highlighting content that is interesting or engaging and suppressing content that they consider uninteresting or offensive. As a whole, curation and moderation is important for the healthy functioning of a social network and is desired by most users. But problems arise when users and platforms disagree on specific policies, which is common occurrence in a society with pluralistic views. Users have little recourse when this happens because social networks tend to be natural monopolies and there is no compelling alternative. They must choose between dealing with the status quo, or exiting and losing their audience.
+Companies that operate social platforms tend to become natural monopolies due to network effects. Once a network reaches critical mass, it becomes very hard to compete with and users have no practical alternatives to switch to. The incentive to operate in a user's best interests  weaken, and the outcomes inevitably follow: moderation and curation is optimized for ad revenue over user needs, private data isn't protected as well as it should be and apis for developers become restricted or non-existent.  
 
-A [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) social network that uses cryptography to establish identity and a peer-to-peer network to transmit updates between users offers an alternative. It eliminates the need for a trusted third party allowing developers to build applications and users to switch between them. 
+A [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) offers an alternative that aligns incentives between the network and its users. It uses cryptography to establish user identities and a peer to peer network to transmit data between users. Trusted third parties can be eliminated entirely as any developer can build an application for the network and users can switch between them at any time. While it is significantly harder to design and operate applications on such a network, the incentive alignment will lead to much better long term outcomes that make up for these upfront costs.
+
 
 ### 1.1 Prior Art
 
-Early attempts like Diaspora and ActivityPub achieved a few degrees of decentralization through federation, which allowed users to switch between centralized hosts. SecureScuttlebutt took the more radical approach of eliminating servers and relying on a purely peer-to-peer protocol. Both networks faced the challenge of establishing identities that were memorable, decentralized and secure[^zookos_triangle]. Blockchains like Ethereum have since emerged which provide an effective solution through programmable smart contracts which can achieve all three properties at once. 
+Federated networks like Diaspora and ActivityPub achieved a few degrees of decentralization by allowing users to choose between a few trusted providers. Peer-to-peer networks like SecureScuttlebutt eliminated servers entirely, relying on a pure peer-to-peer architecture with no trusted parties. Blockchain-based social networks like peepeth and steemit used a shared public ledger to keep track of state on social networks.
 
-Another challenge has been disseminating updates between peers while achieving consensus on what the current state of the network is. This is complicated by the fact that social networks have millions of transactions a second. CRDT's[^crdt], which emerged as a consensus mechanism in collaborative applications, offer a strong eventual consistency model that is suitable for the real-time needs of such social networks. 
+Developments in other areas offer some useful building blocks for decentralized social networks. CRDT's[^crdt], which emerged as a consensus mechanism in collaborative applications, offer a strong eventual consistency model better suited for transmitting and storing large volumes of social data. Layer-2 blockchains demonstrate how a peer-to-peer network can leverage the security guarantees of an underlying Layer-1 blockchains while achieving much greater throughput and at lower costs.
 
 ### 1.2 Proposal
 
-Farcaster is comprised of a peer-to-peer network of nodes, called Hubs, which receive and store updates from users. Hubs are similar to blockchain nodes in that they attempt to store a full copy of data on the network and propagate information to each other. Unlike blockchains, Hubs use a different consensus model to make changes possible in real-time. Changes are synchronized using a delta-graph, which is a data structure that uses CRDT's to achieve real-time updates with strong eventual consistency.
+Farcaster is a social network that uses Ethereum to manage user identities and a peer-to-peer network of nodes to propagate updates between users. It offers: 
 
-A user's identity is represented by a public-private key pair which signs each update made by the user. The mapping of user ids to key pairs is managed using a series of contracts on the Ethereum blockchain. Hubs monitor these contracts for new users and keep track of their key pairs so that their updates can be authenticated. Conceptually, the Farcaster network is split into two layers - an identity layer, that lives on ethereum and a data layer, that lives on the hub network.
+1. Secure, memorable and human-readable user identifiers like `@alice`
+2. Real-time settlement and propagation of changes between users.
+3. Decentralized access to the all data on the network at reasonable costs.
 
-Users will connect to the network by using an application that offers a user friendly interface. Simple applications might connect directly to Hubs and allow the user to browse the network by querying the Hub. Other applications might offer advanced features like timeline feeds, recommendations and push notifications which may require a proxy backend server between the client and the Hub. 
+Users sign up by registering a new key-pair and claiming an identity on the Ethereum blockchain. The key-pair is used to sign all messages from a user, rendering them tamper-proof and self-authenticating. A smart contract maintains the mapping of key pairs to identities and servers as a public lookup, allowing any user to verify a message sent by any other user on the network. 
+
+A peer-to-peer network of nodes stores and propagates  messages created by users in real-time. Nodes, also known as Hubs, use CRDT's to achieve strong eventual consistency while settling updates in real time. They take advantage of the fact that social updates are independent operations and allow them to be settled simultaneously on each node, without an explicit consensus round-trip. 
+
+Applications make it easy for users to connect to the network by offering a friendly user interface. Simple applications might connect directly to Hubs and allow the user to browse the network by querying the Hub. Other applications might offer advanced features like timeline feeds, recommendations and push notifications which may require a proxy backend server between the client and the Hub. 
+
 
 ```mermaid
 flowchart LR
