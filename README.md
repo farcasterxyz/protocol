@@ -177,13 +177,18 @@ Formally, the delta-graph $G$ is a set of delta-state CRDTs $\{C_1, C_2,... \}$ 
 
 ## 3.2 Authentication
 
-Users must only be able to modify parts of the graph that they have the authority to change. For example, @bob may add a follow relationship connecting him to @alice, but cannot add one connecting @alice and @charlie. Authentication is performed with cryptographic signatures and each delta is hashed and signed with an asymmetric key pair associated with the user that created it. 
+Users are only allowed to modify parts of the graph associated with them. For example, @bob may follow @alice, but cannot make @alice follow @charlie. Deltas are authenticated by making each user hash and sign them with an asymmetric key pair. CRDT's ensure that a delta's signatures are valid and that the user singing them is allowed to change the resource. Each type of delta may define different rules governing what a user can change. Signatures also make the delta is tampered-proof and it can be transmitted over untrusted networks. 
 
-Each delta-types CRDT ensures that its signature matches a user's key pair and also verify that the user is allowed to modify the resource $r$. The rules governing what a user can modify is specified by each delta operation. Cryptographic authentication also makes the CRDT's *anonymous* since a delta cannot be tampered with and can be safely transmitted between any two CRDT instances.
+Users must sign every delta with an EdDSA key pair known as a *signer*. A user can create multiple signers and assign one to each Farcaster application they use. A user's valid signers are tracked using a CRDT known as the Signer CRDT. Other CRDT's will only accept a delta if it was signed by a known signer in the CRDT. Users can revoke signers if they suspect that it is compromised, which evicts all deltas authorized by the signer. 
 
-Users begin with a custody address established by the [identity system](#2-identity-model) which is an ECDSA key pair. This key pair is used to establish EdDSA key pairs known as *signers* which may be used to sign other deltas. Users may have multiple valid signers at any given time which may be used by different applications to post messages to the network. The delta-graph keeps track of signers using a special CRDT known as the Signer CRDT. Other CRDT's will only accept a delta if it is signed by a known key pair in the Signer CRDT.
+A signer is added by signing a special delta with the user's custody address, which is an ECDSA key pair. This forms a chain of trust from the fid on the blockchain to each delta. A custody address is only allowed to create signer deltas and may not sign any other type of delta. This ensures that most apps do not end up hosting ECDSA key pairs which create security and regulatory challenges if funds are sent to them on Ethereum. 
 
-A Signer, which can be controlled by the user or a third-party client, can sign most types of Farcaster messages. Signers enable a secure application model where users can temporarily authorize apps to send messages on their behalf without giving up control over their fid. If the app is compromised, its Signer can be revoked by the custody address. All messages signed by the Signer will be discarded.
+```mermaid
+graph LR
+    Custody([Eth Custody Address]) --> |Signer Delta, ECDSA Sig|SignerA1([Farcaster Signer])
+    SignerA1 -->  |Cast Delta, EdDSA sig|CastC[Hello World!]
+    SignerA1 -->  |Cast Delta, EdDSA sig|CastD[It's Alice!]
+```
 
 ## 3.3 Bounding Graph Size
 
