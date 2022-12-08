@@ -104,24 +104,11 @@ An fname is issued an NFT which contains a unique username that matches the regu
 
 Fnames are issued by the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/) and an fname can be registered for one year at a time by paying a fee. A governance system determines the fee which is changed periodically. Names can be renewed up to 90 days before they expire, and if they expire unrenewed they are placed in a public dutch auction. The bidding starts at the yearly fee plus a premium, which decays periodically until it becomes zero. 
 
-#### Username Policy
-
-Usernames are free to register during beta and are governed by a simple policy that prevents squatting and impersonation. The policy is manually enforced for now since it is not easy to automate and has two tenets: 
-
-1. If you register an fname connected to a well-known public person or entity, your name may be deregistered. (e.g. `@google`)
-2. If don't actively use an fname for 60+ days, your name may be de-registered at our discretion.
-
- While on testnet, the core team will arbitrate conflicts and we expect to formalize a governance system  as we approach mainnet. Human intervention is often needed to resolve reasonable conflicts. For instance, you register `@vitalik` and Vitalik Buterin signs up after you and wants the name. In such a case, we would ask three questions that guide the decision:
-
-- Is the user active on Farcaster? (e.g. they've made several high quality posts in the last 60 days)
-- Does the user have a reasonable claim to the name? (e.g. their name also Vitalik?)
-- Does the user hold similar, active handles on other networks? (e.g. they own vitalik on twitter and vitalik.ens)
-
 ## 2.3 Recovery
 
 Fids and fnames implement a recovery system that allows users to recover from the loss of their custody address. Users may choose a secondary address known as their recovery address which can be a wallet they own, a multi-sig shared with friends or a third-party recovery service.  
 
-A recovery address can request a transfer of the fid or fname to a new custody address at any time. The request remains in escrow for 7 days after which the recovery address may complete the transfer. The custody address can cancel a transfer request at any time if the request was not authorized by them. Ownership of fids and fnames remains fully decentralized since the recovery address cannot move them without the user's permission. But in the event that the custody address was lost, the recovery address can successfully complete the transfer.
+A recovery address can request a transfer of the fid or fname to a new custody address at any time. The request remains in escrow for three  days after which the recovery address may complete the transfer. The custody address can cancel a transfer request at any time if the request was not authorized by them. Ownership of fids and fnames remains fully decentralized since the recovery address cannot move them without the user's permission. But in the event that the custody address was lost, the recovery address can successfully complete the transfer.
 
 # 3. The Delta-Graph
 
@@ -235,14 +222,13 @@ A simple application might consist of a standalone desktop or mobile client that
 
 A more sophisticated application might add a proxy backend server that indexes data from Hubs. Indexing allows servers to implement features like search, algorithmic feeds, and spam detection that are difficult or expensive to perform on the Hub. Such applications can be **self-hosted** by storing keys on the client; **delegated** by asking users for a signer; or **hosted** by managing all keys including the custody address.
 
-# 6. Governance
+# 6. Upgradeability
 
-Farcaster's governance dictates how changes to the protocol can be proposed, how consensus is built around those changes and how they are implemented and released. During beta, the process is lightweight to encourage community participation and rapid development cycles. As we move to finalizing the protocol on mainnet stricter controls will be put in place to ensure that the protocol remains credibly neutral and that changes are safe, well tested and have passed thorough review.
+Farcaster is designed to be upgradeable and this section covers how changes to the protocol can be proposed, how consensus is built around those changes and how they are implemented and released. During beta, the process is lightweight to encourage community participation and rapid development cycles. As we move to finalizing the protocol on mainnet stricter controls will be put in place to ensure that the protocol remains credibly neutral and that changes are safe, well tested and have passed thorough review.
 
 New changes can be proposed by opening up a new discussion topic in the [protocol](https://github.com/farcasterxyz/protocol/discussions), hub or contract repositories. The community can comment and make suggestions and the core team will make the final decision on accepting changes. The core team controls access to the Github repositories and accepts changes. Once approved, an issue is created and the specification changes are merged into this repository.
 
 The Farcaster core team will work closely with Hub operators and application developers to ensure that changes land smoothly with minimal disruption to the network. Hub operators also have a veto over changes to the Hub, which they can exercise by not upgrading their version of the Hub. It is desirable for developers and operators to have this power to ensure decentralization of the network, but ideally they would never need to exercise it.
-
 
 ## 6.1 Release Schedule
 
@@ -462,7 +448,7 @@ The Signer Store has a two-phase CRDT with an add-set and a remove-set for each 
 The store ensures that there is a maximum of 100 signer messages per fid.
 
 
-## 5.3 Casts
+## 7.3 Casts
 
 A Cast is a public message created by a user which contains some text and is displayed on their account. Casts may also contain URI's pointing to media, on-chain activity or even other casts. Casts can also be removed by the user who created them at any time. 
 
@@ -539,7 +525,7 @@ The resource id $r$ for a cast-add message is the tuple `(fid, hash)` while the 
 The store ensures that there is a maximum of 10,000 cast messages per fid and any casts older than 1 year are expired from the set.
 
 
-## 5.4 Reactions
+## 7.4 Reactions
 
 A Reaction is a type of link between a user and a target which can be a cast, url or on-chain activity. The two types of reactions are likes and recasts, and the protocol can be extended to support new types. Reactions can be added and removed at any time and represent an edge in the social graph. Add and remove messages for reactions have identical bodies with different types. 
 
@@ -565,7 +551,7 @@ The resource id $r$ for any type of reaction message is the triple `(fid, castId
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 5.5 Follows
+## 7.5 Follows
 
 A Follow is a link between two users which indicates that one user is subscribed to the updates of another. They can be added and removed at any time and represent an edge in the social graph. Add and remove messages for follows have identical bodies with different types.
 
@@ -585,13 +571,13 @@ The resource id $r$ for any type of follow message is the tuple `(fid, userId)` 
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 5.6 Verifications
+## 7.6 Verifications
 
 A verification is a bi-directional, cryptographic proof of ownership between a Farcaster account and an external account. They can be used to prove ownership of Ethereum addresses, specific NFTs, social media accounts, or domain names. 
 
 A VerificationAdd message must contain an identifier for the external account and a signature from it. Each type of verification will have its own AddMessage since they may contain different types of identifiers and signatures. The resource id $r$ of the verification is the identifier for the external account. Verification are removed with a VerificationRemove messages that contains the resource identifier.
 
-### 5.6.1 Verification Messages
+### 7.6.1 Verification Messages
 
 ```ts
 VerificationAddEthAddressBody {
@@ -615,7 +601,7 @@ The resource id $r$ for any type of follow message is the tuple `(fid, address)`
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 5.7 User Data
+## 7.7 User Data
 
 User Data stores metadata about a user like their profile picture or display name. A fixed number of user data entries are permitted by the protocol and there is no remove operation, though values can be reset to null.
 
@@ -637,7 +623,7 @@ UserDataType {
 
 TODO: define validation rules for each type
 
-### 5.7.3 User Data Store
+### 7.7.3 User Data Store
 
 The User Data Store is a grow-only set CRDT with last write wins semantics that stores user data messages in a set. The resource id $r$ for any user data message is the tuple `(fid, dataType)` and only one message may exist per type. If a new message `m` is received that has $r$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules: 
 
@@ -658,6 +644,22 @@ Client should follow these rules when rendering casts:
 - Hyperlink all mention matches to the user's profile page.
 
 Clients may also send notifications to their users or render them as hyperlinks in their UI
+
+# Appendix C: Contract Specifications
+
+#### Username Policy
+
+Usernames are free to register during beta and are governed by a simple policy that prevents squatting and impersonation. The policy is manually enforced for now since it is not easy to automate and has two tenets: 
+
+1. If you register an fname connected to a well-known public person or entity, your name may be deregistered. (e.g. `@google`)
+2. If don't actively use an fname for 60+ days, your name may be de-registered at our discretion.
+
+ While on testnet, the core team will arbitrate conflicts and we expect to formalize a governance system  as we approach mainnet. Human intervention is often needed to resolve reasonable conflicts. For instance, you register `@elon` and Elon Musk signs up after you and wants the name. In such a case, we would ask three questions that guide the decision:
+
+- Is the user active on Farcaster? (e.g. they've made several high quality posts in the last 60 days)
+- Does the user have a reasonable claim to the name? (e.g. their name also Elon?)
+- Does the user hold similar, active handles on other networks? (e.g. they own elon on twitter and elon.ens)
+
 
 [^crdt]: Shapiro, Marc, et al. “Conflict-Free Replicated Data Types.” Lecture Notes in Computer Science, 2011, pp. 386–400., https://doi.org/10.1007/978-3-642-24550-3_29. 
 [^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163p
