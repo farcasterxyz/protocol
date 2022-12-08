@@ -7,36 +7,21 @@
 1. [Introduction](#1-introduction)
    1. [Prior Art](#11-prior-art)
    2. [Proposal](#12-proposal)
-2. [Identity](#3-account-contracts)
-   1. [Farcaster ID Registry (FIR)](#31-farcaster-id-registry-fir)
-   1. [Farcaster Name Registry (FNR)](#32-farcaster-name-registry-fnr)
-   1. [Recovery](#33-recovery)
-2. [System Design](#2-system-design)
-   1. [Accounts](#21-accounts)
-   2. [Signed Messages](#22-signed-messages)
-   3. [Hubs](#23-hubs)
-   4. [Applications](#24-applications)
-4. [Storage](#4-replication)
-   1. [Casts](#41-casts)
-   2. [Actions](#42-actions)
-   3. [Verifications](#43-verifications)
-   4. [Metadata](#44-metadata)
-   5. [Signers](#45-signers)
-   6. [Custody Signer Revocations](#46-root-signer-revocations)
-   7. [Sharding](#47-sharding)
-5. [Peering](#5-peering)
-6. [Releases](#6-releases)
-   1. [Hub Releases](#61-hub-releases)
-   2. [Contract Releases](#62-contract-releases)
-   3. [Protocol Releases](#63-protocol-releases)
-7. [Security Considerations](#7-security-considerations)
-   1. [Signer Compromise](#71-signer-compromise)
-   2. [Eclipse Attacks](#72-eclipse-attacks)
-   3. [Flooding Attacks](#73-flooding-attacks)
-   4. [DDOS Attacks](#74-ddos-attacks)
-   5. [Replay Attacks](#75-replay-attacks)
-8. [URIs](#8-uris)
-9. [Governance](#9-governance)
+2. [Identity](#2-identity)
+   1. [Farcaster ID's](#21-farcaster-ids)
+   2. [Farcaster Names ](#22-farcaster-names)
+   3. [Recovery](#23-recovery)
+3. [Delta Graph](#3-delta-graph)
+   1. [Delta Operations](#31-delta-operations)
+   2. [Authentication](#32-authentication)
+   3. [Bounding Graph Size](#33-bounding-graph-size)
+   4. [Ordering](#34-ordering)
+4. [Hubs](#4-hubs)
+   1. [Peering](#41-peering)
+   2. [Synchronization](#42-synchronization)
+5. [Applications](#5-applications)
+6. [Upgradeability](#6-upgradeability)
+   1. [Release Schedule](#61-release-schedule)
 
 ## 1. Introduction
 
@@ -110,7 +95,7 @@ Fids and fnames implement a recovery system that allows users to recover from th
 
 A recovery address can request a transfer of the fid or fname to a new custody address at any time. The request remains in escrow for three  days after which the recovery address may complete the transfer. The custody address can cancel a transfer request at any time if the request was not authorized by them. Ownership of fids and fnames remains fully decentralized since the recovery address cannot move them without the user's permission. But in the event that the custody address was lost, the recovery address can successfully complete the transfer.
 
-# 3. The Delta-Graph
+# 3. Delta-Graph
 
 A delta-graph stores and replicates the current state of a social network. It is a graph that is stored in a series of CRDT's which allows users to make real-time updates while guaranteeing that the network will become eventually consistent.
 
@@ -156,7 +141,7 @@ A delta must have a unique identifier $i$ constructed by taking a hash of the de
 
 A delta must have a resource identifier $r$ which identifies the edges and vertices being modified. Deltas are in conflict when they have the same $r$ value but different $i$ values. Two deltas with the same value of $r$ must always modify the exact same resources and two deltas with distinct values of $r$ always modify distinct resources.  The deltas in the example above conflict because they modify the follow relationship between alice and bob. The triple `(alice, bob, follow)` is used as an $r$ for both deltas. 
 
-A delta also has a total ordering $(t, i)$, where $t$ is a user reported timestamp and $i$ is the hash digest. This order is used to resolve conflicts using different schemes. For example, a last-write-wins scheme would resolve conflicts by choosing the delta with the higher $t$ value, falling back to lexicographically comparing the $i$ values if the timestamps are in conflict. Since $i$ is guaranteed to be unique for each conflicting delta, this always produces a winner. This ensures that adding two deltas is both commutative and associative. 
+A delta also have a total ordering $(t, i)$, where $t$ is a user reported timestamp and $i$ is the hash digest. This order is used to resolve conflicts using different schemes. For example, a last-write-wins scheme would resolve conflicts by choosing the delta with the higher $t$ value, falling back to lexicographically comparing the $i$ values if the timestamps are in conflict. Since $i$ is guaranteed to be unique for each conflicting delta, this always produces a winner. This ensures that adding two deltas is both commutative and associative. 
 
 A data structure known as a CRDT or conflict-free replicated datatype is used to store deltas and it implements rules to ensure that the deltas produce a valid graph and that they remain commutative, associative and idempotent. Each delta type has its own CRDT since there is often additional logic that specific to each type that must also be implemented. The graph itself is a series of such CRDT's that each produces a distinct sub-graph of the graph $G$. 
 
@@ -164,11 +149,11 @@ Formally, the delta-graph $G$ is a set of delta-state CRDTs $\{C_1, C_2,... \}$ 
 
 ## 3.2 Authentication
 
-Users are only allowed to modify parts of the graph associated with them. For example, @bob may follow @alice, but cannot make @alice follow @charlie. Deltas are authenticated by making each user hash and sign them with an asymmetric key pair. CRDT's ensure that a delta's signatures are valid and that the user singing them is allowed to change the resource. Each type of delta may define different rules governing what a user can change. Signatures also make the delta is tampered-proof and it can be transmitted over untrusted networks. 
+Users are only allowed to modify parts of the graph associated with them. For example, @bob may follow @alice, but cannot make @alice follow @charlie. Deltas are authenticated by making each user hash and sign them with an asymmetric key pair. CRDT's ensure that a delta's signatures are valid and that the user singing them is allowed to change the resource. Each type of delta may define different rules governing what a user can change. Signatures also make the delta is tamper-proof allowing it to be transmitted over untrusted networks. 
 
 Users must sign every delta with an EdDSA key pair known as a *signer*. A user can create multiple signers and assign one to each Farcaster application they use. A user's valid signers are tracked using a CRDT known as the Signer CRDT. Other CRDT's will only accept a delta if it was signed by a known signer in the CRDT. Users can revoke signers if they suspect that it is compromised, which evicts all deltas authorized by the signer. 
 
-A signer is added by signing a special delta with the user's custody address, which is an ECDSA key pair. This forms a chain of trust from the fid on the blockchain to each delta. A custody address is only allowed to create signer deltas and may not sign any other type of delta. This ensures that most apps do not end up hosting ECDSA key pairs which create security and regulatory challenges if funds are sent to them on Ethereum. 
+A signer is added by signing a special delta with the user's custody address, which is an ECDSA key pair. This forms a chain of trust from the user's fid to each delta. A custody address is only allowed to create signer deltas and may not sign any other type of delta. This ensures that most apps do not end up hosting ECDSA key pairs which create security and regulatory challenges if funds are sent to them on Ethereum. 
 
 ```mermaid
 graph LR
