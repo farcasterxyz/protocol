@@ -25,37 +25,58 @@
 
 ## 1. Introduction
 
-Social media is increasingly becoming the the lens through which our society perceives the world around it. It shapes our views about our friends, colleagues, and current events in the world around us. Social media companies are trusted third-parties that perform three important functions: they help each user establish an identity recognizable to their peers, collect updates from billions of users and distribute them via user-friendly applications. 
+Social media is becoming the lens through which our society perceives the world around it. It shapes our views about our friends, colleagues, and current events in the world around us. Social media companies serve as trusted third parties that perform three functions: help billions of users establish identities, collect their updates in real-time and distribute them to peers through user-friendly apps.
 
-Companies that operate social platforms tend to become natural monopolies due to network effects. Once a network reaches critical mass, it becomes very hard to compete with and users have no practical alternatives to switch to. The incentive to operate in a user's best interests  weaken, and the outcomes inevitably follow: moderation and curation is optimized for ad revenue over user needs, private data isn't protected as well as it should be and apis for developers become restricted or non-existent.  
+Social platforms emerge as natural monopolies due to network effects. Once a network reaches critical mass, it becomes tough to compete with, leaving users with no practical alternatives. The incentive to operate in a user's best interests weakens, and the outcomes follow. Moderation and curation policies maximize ad revenues at the expense of user needs, private data isn't protected as well as it should be, and APIs for developers become restricted or non-existent.
 
-A [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) offers an alternative that aligns incentives between the network and its users. It uses cryptography to establish user identities and a peer to peer network to transmit data between users. Trusted third parties can be eliminated entirely as any developer can build an application for the network and users can switch between them at any time. While it is significantly harder to design and operate applications on such a network, the incentive alignment will lead to much better long term outcomes that make up for these upfront costs.
+A [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) network could align incentives between the network and its users. It can use cryptography to establish user identities and a peer-to-peer network to send data between users. Trusted third parties are unnecessary as any developer can build an app, and users can switch between them anytime. While it is harder to design and operate such a network, the aligned incentives will lead to much better long-term outcomes.
 
 
 ### 1.1 Prior Art
 
-Federated networks like Diaspora and ActivityPub achieved a few degrees of decentralization by allowing users to choose between a few trusted providers. Peer-to-peer networks like SecureScuttlebutt eliminated servers entirely, relying on a pure peer-to-peer architecture with no trusted parties. Blockchain-based social networks like peepeth and steemit used a shared public ledger to keep track of state on social networks.
+Federated networks like ActivityPub achieve a few degrees of decentralization by allowing users to choose a trusted provider. SecureScuttlebutt eliminates servers and relies on a peer-to-peer architecture without trusted parties. Blockchain-based social networks like peepeth and steemit used public ledgers to track network state.
 
-Developments in other areas offer some useful building blocks for decentralized social networks. CRDT's[^crdt], which emerged as a consensus mechanism in collaborative applications, offer a strong eventual consistency model better suited for transmitting and storing large volumes of social data. Layer-2 blockchains demonstrate how a peer-to-peer network can leverage the security guarantees of an underlying Layer-1 blockchains while achieving much greater throughput and at lower costs.
+Developments in other areas offer useful building blocks for decentralized social networks. CRDT's allow networks to reach strong eventual consistency without a coordination layer. Layer-2 blockchains show how networks can achieve greater throughput and lower costs by building on top of Layer-1's.
+
 
 ### 1.2 Proposal
 
-Farcaster is a social network that uses Ethereum to manage user identities and a peer-to-peer network of nodes to propagate updates between users. It offers: 
+Farcaster is a decentralized social network built on top of Ethereum. The Layer 1 blockchain manages user identities, while a Layer 2 network propagates updates between users . It offers:
 
-1. Secure, memorable and human-readable user identifiers like `@alice`
+1. Secure, memorable, and human-readable user identifiers like `@alice`
 2. Real-time settlement and propagation of changes between users.
-3. Decentralized access to the all data on the network at reasonable costs.
+3. Decentralized access to all data on the network at reasonable costs.
 
-Users sign up by registering a new key-pair and claiming an identity on the Ethereum blockchain. The key-pair is used to sign all messages from a user, rendering them tamper-proof and self-authenticating. A smart contract maintains the mapping of key pairs to identities and servers as a public lookup, allowing any user to verify a message sent by any other user on the network. 
+Users start by registering a public-private key-pair and an id with an Ethereum contract. A message must include id the and a signature from the key-pair, which makes it tamper-proof and self-authenticating. Recipients can look up the key-pair associated with the id in the contract and verify the message's authenticity.
 
-A peer-to-peer network of nodes stores and propagates  messages created by users in real-time. Nodes, also known as Hubs, use CRDT's to achieve strong eventual consistency while settling updates in real time. They take advantage of the fact that social updates are independent operations and allow them to be settled simultaneously on each node, without an explicit consensus round-trip. 
+Users upload signed messages to a Farcaster Hub, which is like a node in a blockchain network. Hubs share messages over a peer-to-peer protocol, and each Hub stores all the messages on the network. Hubs use [delta graphs](#3-delta-graph) to reach consensus about the network's state. Since updates are independent operations, delta graphs achieve consensus without coordination, forming a layer-2 storage network.  
 
-Applications make it easy for users to connect to the network by offering a friendly user interface. Simple applications might connect directly to Hubs and allow the user to browse the network by querying the Hub. Other applications might offer advanced features like timeline feeds, recommendations and push notifications which may require a proxy backend server between the client and the Hub. 
-
+Developers can create desktop and mobile applications for users to interact with the network. Apps connect to Hubs and subscribe to updates from specific parts of the network relevant to the user. They can use servers to cache data, generate feeds, make recommendations and send notifications. Such apps can offer all the features and services that users have come to expect from modern social networks.
 
 ```mermaid
-flowchart LR
-   foo --> bar 
+graph LR
+    subgraph L1 Blockchain
+        id[Farcaster Contracts]
+    end
+
+    subgraph L2 Deltagraph
+        id---hub1[<center>Farcaster Hub</center>]
+        id---hub2[<center>Farcaster Hub</center>]
+    end 
+
+    hub2---app1[<center>Server</center>]
+    hub1---app2[<center>Server</center>]
+
+    subgraph App2
+        app1-.-cam1(Client)
+        app1-.-cam2(Client)
+    end
+
+    subgraph App1
+        app2-.-pi2(Client)
+        app2-.-nvr(Client)
+    end
+
 ```
 
 # 2. Identity
