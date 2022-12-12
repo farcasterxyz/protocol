@@ -79,39 +79,37 @@ graph LR
 
 # 2. Identity
 
-The Farcaster Identity system allows users to establish identities and authentication mechanisms to securely exchange messages over an untrusted network. It is composed of three components:
+The identity system allows any two users on Farcaster to find each other and establish a secure communication channel. Importantly, this does not need any trusted third party in the mix. Each user's identity has three components:
 
-1. A unique, numeric identifier that represents a person or organization. (e.g. `8098` )
-2. An ECDSA key pair that can create signatures on behalf of the identifier.
+1. A unique, numeric identifier (e.g. `8098` )
+2. An ECDSA key-pair that can sign messages
 3. An optional, cosmetic username from a name registry (e.g. `alice`)
 
-Farcaster uses the Ethereum blockchain to track each user's id, key pair and usernames. An id must have exactly one key pair associated it with at any time, though it may have multiple names. Usernames from any Ethereum-based name registry are supported as long as there exists a mechanism to associate a name with a particular Ethereum address.
+Users must generate a new Ethereum address which serves as their key pair and use it to acquire an id, and optionally a username. The id is a canonical reference for a user on the Ethereum network. Users may pick a username from any Ethereum-based name registry to serve as a more human-readable reference. Farcaster's Ethereum contracts keep track of each user's id, key pair, and username on-chain. Ethereum's blockchain architecture ensures that ownership of identities remains decentralized and secure.
 
 ## 2.1 Farcaster ID's
 
-A Farcaster ID or `fid` is the canonical identifier for a user or organization on the Farcaster network. It is a numeric value like !8098 which is distinguished from other values with a preceding exclamation mark. Any reference to the user on the network must always be made with this identifier.
+A Farcaster ID or `fid` is the canonical identifier for a user or organization. Fids are numerical values like !8098, distinguished from other numbers by prefixing them with an exclamation mark. Users register fids to an Ethereum address, also known as the `custody address`. Users can transfer fids to a new custody address, though each address can own exactly one fid at a time.
 
-An fid is associated with exactly one Ethereum address, which an the ECDSA key pair that is known as the `custody address`. Signatures from this key pair serve to authenticate requests made by the user. Fids may be transferred to a new custody address at any time, though a single address can own no more than one fid at any point in time.
+Users must call the [Farcaster ID Registry](https://github.com/farcasterxyz/contracts/) contract and pay a small amount of gas to request an fid. The contract issues a new unique, 256-bit unsigned integer which becomes the fid. Anyone can inspect the contract to determine the custody address that owns an fid.
 
-Fids are issued by the [Farcaster ID Registry](https://github.com/farcasterxyz/contracts/) on Ethereum which maintains a mapping of fids to custody addresses. A user must make a transaction and pay a small amount of gas which assigns a unique, 256-but unsigned integer to the address. There exists a near infinite supply (2^256) of fids that can be issued by the contract.
-
-Ownership of an fid is fully decentralized and the ID Registry has no mechanisms that could revoke an fid once issued. The ID Registry enables sufficient decentralization by allowing tow users to send tamper-proof messages over an untrusted network. A sender can sign a message with their custody address and broadcast it to through any channel. The receiver can verify the message by looking up their key pair on the ID Registry and validating the signature.
-
-A username from an Ethereum name registry can be associated with an fid by moving the asset into the custody address. Applications may choose to use these usernames instead of the fid and may allow users the choice of configuring their preferred name registry. Users with multiple usernames will also have a mechanism to specify their preferred name to applications using an off-chain message.
+Users can sign a message containing their fid with the ECDSA key pair of their custody address. Recipients can verify its authenticity by looking up the custody address in the ID Registry and verifying the signature. No-one can reclaim or revoke an fid once a custody address claims it. This ensures sufficient decentralization by allowing tamper-proof communication over untrusted networks without requiring trusted third parties.
 
 ## 2.2 Farcaster Names
 
-A Farcaster name or `fname` is an optional, unique, human readable name that can be associated with an fid. It is an alphanumeric value like `@alice` which is distinguished from other values with a preceding at-symbol. Clients may replace fids in their UIs with fnames to make it easier for users to visually identify each other.
+A Farcaster name or `fname` is an optional, human-readable identifier for users and organizations. Fnames are alpha-numeric like @alice, distinguished from other text by prefixing it with an at-symbol. Users can get register an fname to a custody address, which can own more than one name at a time.
 
-An fname is issued an NFT which contains a unique username that matches the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. They have specific properties that make them useful in a social network relative to other namespaces like ENS. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) because of the restricted character set and also [recoverable](#33-recovery). Farcaster does not mandate the usage of an fname, and users are free to use alternate namespaces with their `fids`.
+Fnames must be unique and match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. While Ethereum has many namespaces, fnames have unique properties that make them very useful in social networks. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack), and are [recoverable](#33-recovery).
 
-Fnames are issued by the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/) and an fname can be registered for one year at a time by paying a fee. A governance system determines the fee which is changed periodically. Names can be renewed up to 90 days before they expire, and if they expire unrenewed they are placed in a public dutch auction. The bidding starts at the yearly fee plus a premium, which decays periodically until it becomes zero.
+User register fnames for a year at at ime by paying a fee to the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/), which issues each one as an NFT. The protocol's core team periodically sets the fee rate to a value that makes squatting less practical. An fname becomes renewable ninety days before it expires. Once expired, fnames enter a dutch auction where the price is set to a yearly fee plus a premium, which decays until it reaches zero.
 
 ## 2.3 Recovery
 
-Fids and fnames implement a recovery system that allows users to recover from the loss of their custody address. Users may choose a secondary address known as their recovery address which can be a wallet they own, a multi-sig shared with friends or a third-party recovery service.
+Users may appoint a recovery address to protect their fnames and fids in case they lose access to the custody address. The recovery address can request a transfer to a new custody address, executable after a three-day escrow.
 
-A recovery address can request a transfer of the fid or fname to a new custody address at any time. The request remains in escrow for three days after which the recovery address may complete the transfer. The custody address can cancel a transfer request at any time if the request was not authorized by them. Ownership of fids and fnames remains fully decentralized since the recovery address cannot move them without the user's permission. But in the event that the custody address was lost, the recovery address can successfully complete the transfer.
+Ownership of fids and fnames remains decentralized because unauthorized recoveries are preventable. During the escrow period the owner can cancel a transfer and revoke a malicious recovery address. The request completes only if the user permits it to happen or if they no longer have access to their custody address.
+
+The registry contracts allow recovery addresses to be set at any time and to any address. Users may configure them to point to a backup address, a friend's wallet, a multi-sig, or even a third-party recovery service. This system only protects against address loss, and not address compromise.
 
 # 3. Delta-Graph
 
