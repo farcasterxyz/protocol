@@ -12,10 +12,10 @@
    2. [Farcaster Names ](#22-farcaster-names)
    3. [Recovery](#23-recovery)
 3. [Delta Graph](#3-delta-graph)
-   1. [Delta Operations](#31-delta-operations)
-   2. [Authentication](#32-authentication)
-   3. [Bounding Graph Size](#33-bounding-graph-size)
-   4. [Ordering](#34-ordering)
+   1. [Synchronization](#31-synchronization)
+   2. [Ordering](#32-ordering)
+   3. [Authentication](#33-authentication)
+   4. [Bounding Graph Size](#34-bounding-graph-size)
 4. [Hubs](#4-hubs)
    1. [Peering](#41-peering)
    2. [Synchronization](#42-synchronization)
@@ -113,63 +113,74 @@ The registry contracts allow recovery addresses to be set at any time and to any
 
 # 3. Delta-Graph
 
-A delta-graph stores and replicates the current state of a social network. It is a graph that is stored in a series of CRDT's which allows users to make real-time updates while guaranteeing that the network will become eventually consistent.
-
-A graph $G$ can model a social network by using vertices to represent entities and edges to represent relationships. An entity is a visible artefact like a user or a post, while a relationship is something that must be visualized in the context of other entities, like as a reaction. The graph is _multi-dimensional_, since there are many relationship types, and _directed_, since they flow in a single direction.
-
-A network where @alice and @bob follow each other, @alice posts a message and @bob likes it can be visualized as:
+A delta graph is a data structure that represents and synchronizes a social network's state between many replicas. The state of the social network is a graph where each vertex is an entity like a user or message, and each edge is a relationship between entities.  A network where @alice creates a message and @bob likes and replies to it would produce this graph: 
 
 ```mermaid
 graph LR
-    A(alice) -->|owns| M1([Hello World!])
-    B(bob) -->|follows| A
-    B -->|likes| M1
+  M1([Hello World!]) -->|author| A(alice)
+  M2([Welcome!]) --> |author| B(bob)
+  M2 --> |reply-to|M1
+  B --> |likes|M1
+
+  style A text-align:left 
+  style B text-align:left 
+  style M1 text-align:left
+  style M2 text-align:left
 ```
 
-## 3.1 Delta Operations
 
-A delta $\delta$ is an operation that increments the graph by inserting vertices or edges. Deltas represent actions taken by users and are the atomic unit of change in a delta-graph. For example, making a post is a delta that creates a new entity (a post) and a relationship between the user and the post (author). There are six types of deltas defined by the protocol: signers, casts, reactions, follows, verifications and user data. The above graph can be represented with the following deltas:
+The graph decomposes into a series of deltas $\delta$ which help with synchronization over an unreliable network. A delta is an action a user takes, like posting a message or liking something. There are six types of deltas defined by the Farcaster protocol: 
+
+1. **casts**, which are messages from a user
+2. **reactions**, which are reactions to a user's messages from another user (e.g., a like)
+3. **amps**, which are amplifications or endorsements of a user
+4. **verifications**, which are proofs of ownership (e.g., an Ethereum address signature)
+5. **signers**, which are key pairs authorized by a user to sign their deltas
+6. **user data**, which are metadata about the user (e.g., their profile picture)
+
+Each delta is an atomic operation that may add one or more vertices or edges to the social graph. Some deltas may add multiple nodes and edges in a single action. Consider @bob's reply-cast to @alice's cast which must add a new entity (the cast) and set up two relationships, one to bob as the author and the other to alice's cast as the parent. The graph in the example above can be broken down into the following deltas: 
 
 ```mermaid
-flowchart TB
-    subgraph follows
-        bob-->|follow-add| alice
-    end
-    subgraph reactions
-        bob3--> |like-add| W1(Hello World!)
-    end
-        subgraph casts
-        alice1 --> |cast-add| W2(Hello World!)
-    end
+flowchart TD
+    W2(<b>add-cast</b> <br> message: Hello World! <br>  author: alice <br><br> )
+    W3(<b>add-cast</b> <br> message: Welcome! <br>  author: bob <br> reply-to: Hello World! <br> )
+    W1(<b>add-reaction</b> <br> type: Like <br>  author: bob <br> target: Hello World! <br> )
+
+
+    style W1 text-align:left
+    style W2 text-align:left
+    style W3 text-align:left
 ```
 
-A delta-graph ensures that a valid graph $G$ can be constructed from the set of deltas $D = \{ \delta_1, \delta_2, ... \}$. Two deltas within the same delta-graph cannot modify the same resource. For example, a delta-graph cannot simultaneously contain two deltas `alice, follow, bob, true` and `alice, follow, bob, false` and must resolve the conflict by discarding one of the deltas permanently.
+## 3.1 Synchronization
 
-```mermaid
-flowchart TB
-    subgraph follows
-        bob-->|follow-add| alice
-        bob-->|follow-remove| alice
-    end
-```
+Delta graphs must be able to synchronize the social graph across an unreliable network. Synchronization is straightforward if a set of deltas always produce the same graph when combined in any order, and dropped messages can be re-shared between replicas safely without corrupting the graph's state. Our design goal, in formal terms, is to simplify syncing by making deltas commutative, associative, and idempotent across the graph.
 
-A delta must have a unique identifier $i$ constructed by taking a hash of the delta's bytes. The hash digest $i$ is used to detect duplicates and ensure that the same operation is not added twice into the set of deltas, ensuring idempotency in the delta-graph.
+Idempotency requires that a delta is not applied to a graph more than once. If @alice likes @bob's cast, but she sends the delta twice by accident, it must not count as two likes. Deltas must include a unique identifier $i$, which is the hash digest of the bytes of the delta operation. The delta graph checks any new delta's identifier against all known deltas sand discards it if it is a duplicate.
 
-A delta must have a resource identifier $r$ which identifies the edges and vertices being modified. Deltas are in conflict when they have the same $r$ value but different $i$ values. Two deltas with the same value of $r$ must always modify the exact same resources and two deltas with distinct values of $r$ always modify distinct resources. The deltas in the example above conflict because they modify the follow relationship between alice and bob. The triple `(alice, bob, follow)` is used as an $r$ for both deltas.
+Commutativity and associativity require that a set of deltas always produce the same graph. If @alice likes @bob's cast and unlikes it later, that generates two conflicting deltas that change the same part of the graph. Deltas must have a conflict identifier $c$ and a total ordering scheme. The delta graph discards the delta with the lowest order whenever two deltas have the same $c$ value. 
 
-A delta also have a total ordering $(t, i)$, where $t$ is a user reported timestamp and $i$ is the hash digest. This order is used to resolve conflicts using different schemes. For example, a last-write-wins scheme would resolve conflicts by choosing the delta with the higher $t$ value, falling back to lexicographically comparing the $i$ values if the timestamps are in conflict. Since $i$ is guaranteed to be unique for each conflicting delta, this always produces a winner. This ensures that adding two deltas is both commutative and associative.
+A delta's conflict identifier $c$ must uniquely identify the edges and vertices that it modifies. Deltas with the same $c$ must change the same parts of the graph, and deltas with distinct $c$ values must alter different parts of the graph. In the like and unlike example, the triple `(bob, like, Hello World!)` is sufficient as a $c$ value for both deltas. A delta must also have a user-reported timestamp $t$, which along with the identifier $i$ can produce a total ordering. A last-write-wins scheme might compare $t$ values numerically and then $i$ values lexicographically. Such an ordering would be deterministic across replicas since it does not depend on the time of receipt. 
 
-A data structure known as a CRDT or conflict-free replicated datatype is used to store deltas and it implements rules to ensure that the deltas produce a valid graph and that they remain commutative, associative and idempotent. Each delta type has its own CRDT since there is often additional logic that specific to each type that must also be implemented. The graph itself is a series of such CRDT's that each produces a distinct sub-graph of the graph $G$.
+A CRDT, or conflict-free replicated datatype, stores deltas using the rules described above. Each delta type has its own CRDT, which may include rules specific to the particular type and resembles an anonymous, delta-state CRDT[^delta-state]. The delta graph is therefore a collection of multiple CRDTs which combine to
+Each CRDTs 
 
-Formally, the delta-graph $G$ is a set of delta-state CRDTs $\{C_1, C_2,... \}$ and a CRDT $C$ is a set of deltas $\{ \delta_1, \delta_2, ... \}$. Each CRDT has has a $merge(\delta_n, C_n)$ that produces $ C_n' \geq C_n$ and it can also produce a graph $G[N]$ which is a distinct sub-graph of $G$.
+> Formally, the delta graph $G = \{C_1, C_2,... \}$, CRDT $C =\{ \delta_1, \delta_2, ... \}$ and  $merge(\delta_n, C_n)$ produces $C_n' \geq C_n$.
 
-## 3.2 Authentication
+## 3.2 Ordering
 
-Users are only allowed to modify parts of the graph associated with them. For example, @bob may follow @alice, but cannot make @alice follow @charlie. Deltas are authenticated by making each user hash and sign them with an asymmetric key pair. CRDT's ensure that a delta's signatures are valid and that the user singing them is allowed to change the resource. Each type of delta may define different rules governing what a user can change. Signatures also make the delta is tamper-proof allowing it to be transmitted over untrusted networks.
+Deltas have a **timestamp order** which derives from user-reported timestamps. Timestamp order is partial since many messages can have the same timestamp. It helps with ordering messages in user interfaces like chronological feeds and profiles. It is untrustworthy since it is user-controlled and has a similar trust model to timestamps observed on websites and blogs.
 
-Users must sign every delta with an EdDSA key pair known as a _signer_. A user can create multiple signers and assign one to each Farcaster application they use. A user's valid signers are tracked using a CRDT known as the Signer CRDT. Other CRDT's will only accept a delta if it was signed by a known signer in the CRDT. Users can revoke signers if they suspect that it is compromised, which evicts all deltas authorized by the signer.
+Deltas also have a **lexicographical hash order** derived from the hash digest of the operation itself. Lexicographical hash order is total since each message has a unique hash value. It is arbitrary but deterministic, and CRDTs use it in combination with the timestamp order to resolve conflicts.
 
-A signer is added by signing a special delta with the user's custody address, which is an ECDSA key pair. This forms a chain of trust from the user's fid to each delta. A custody address is only allowed to create signer deltas and may not sign any other type of delta. This ensures that most apps do not end up hosting ECDSA key pairs which create security and regulatory challenges if funds are sent to them on Ethereum.
+Deltas may have an optional, **causal order** set by the user. For instance, a reply cast may contain a reference to its parent cast to help clients reconstruct the conversation thread. Causal ordering is partial since it is optional in some delta types. The ordering is deterministic and meaningful and is useful to applications when rendering content. 
+
+## 3.3 Authentication
+
+Users are only allowed to modify certain parts of the delta graph. For example, @bob can follow @alice but cannot make @alice follow @charlie. Each delta type may define different rules governing what a user can change. Users authenticate deltas by hashing and signing them with an asymmetric key pair. Signatures make the delta tamper-proof, allowing transmission over untrusted networks. CRDTs check the signatures and the segments of the graph modified by the user and only merge changes that pass both validations.  
+
+Users must sign every delta with an EdDSA key pair known as a _signer_. A user can create multiple signers and assign one to each Farcaster application they use. A Signer CRDT tracks each user's valid signer key pairs, and other CRDTs will accept only accept deltas signed by these key pairs. Users add signers by producing a special signer delta signed by their custody address. A signer delta is the only delta that has an ECDSA signature and it forms a chain of trust linking an on-chain identity to an off-chain delta. Users can revoke signers if they suspect a compromise, which evicts all deltas authorized by the signer.
+
 
 ```mermaid
 graph LR
@@ -178,21 +189,16 @@ graph LR
     SignerA1 -->  |Cast Delta, EdDSA sig|CastD[It's Alice!]
 ```
 
-## 3.3 Bounding Graph Size
+## 3.4 Bounding Graph Size
 
-An infinitely growing delta-graph will have an adverse impact on decentralization by raising the costs of operating a Hub. The number of independent operators will decrease and their ability to collude and block participants on the network will increase. Our target is to have at least 100 hubs will full copies of the network in multiple geographies. To achieve this, we believe it is important that a full hub can be operated on the disk resources available on the largest commodity cloud hardware instance which, as of this writing, is 64 TB.
+A delta-graph that can grow forever will adversely impact decentralization by making a hub's storage costs very expensive. The number of hub operators will decrease over time, and their ability to collude and block participants will grow. We aim to have at least 100 hubs across many geographies to ensure decentralization. To achieve this, hubs must be operable on affordable commodity cloud hardware, which has at most 64 TB of attached storage. 
 
-First, we restrict deltas to only containing small text payload so that they remain small. Larger payloads like images and videos must be pushed to other storage systems optimized for these purposes like IPFS. Deltas may contain references to these items and applications can hydrate them when rendering them for their users.
+Deltas are only permitted to contain a small amount of text, and larger payloads must be stored by reference. They must be small enough to fit into a single TCP packet. Special-purpose storage systems like IPFS can host larger payloads, and applications can hydrate them at render time. 
 
-Second, we limit users to storing a finite number of deltas for each type and calculate the limits to keep the size of the graph under 64 TB. When size limit is exceeded, the message with the earliest order is evicted by the CRDT. Since deltas have a total order this can be done deterministically, preserving the guarantees of our CRDT.
+Users can only store a finite number of deltas of each type. The protocol selects limits that will keep the size of the delta graph under 64 TB. CRDTs enforce the size limit by evicting the message in the graph with the earliest ordering. Since deltas are always totally ordered, this does not change the CRDT's guarantees. 
 
-Third, we expire deltas beyond a certain age for some types of messages where users place a greater value on recent messages. This allows size limits to be more generous and is particularly useful for noisier delta types like reactions. CRDT's can implement time-based pruning deterministically though the synching mechanism must allow for clock skew and drift between instances.
+Users are only permitted to store certain deltas for a fixed time. Expiring very old deltas allows us to reclaim space, allowing more generous limits for recent messages. This is particularly useful for noisy data types like reactions where users place a greater value on recency. Time-based expiration of deltas can be deterministic as long as hubs control for clock skew and drift. 
 
-## 3.4 Ordering
-
-Delta timestamps can be used by applications when generating feeds of information for their users. Such timestamps are untrustworthy since they are user reported and the network cannot verify them. The timestamp trust model is like that of a blog where most users tend to be well behaved since a monitoring service at the application level can be used to detect timestamp abuse.
-
-Some interactions like conversations require strict order so that a thread can be reconstructed by applications. Such deltas encode causal ordering in the form of references, where each delta stores its parent's hash. This can be used to enforce a partial ordering across a set of deltas. The cast type includes a parent reference which is used for threaded conversations. The delta-graph does not guarantee that deltas will be received in this causal order, but only that the causal order will be apparent once all the deltas are received.
 
 # 4. Hubs
 
@@ -382,7 +388,7 @@ enum MessageType {
 
 ### 7.1.4 Storage
 
-Messages must be stored using an anonymous Δ-state CRDT[^delta-state] and each delta type has its own CRDT. The rules of the CRDT ensure that a deltas can be added in a manner that is commutative, associative and idempotent while never moving causally backward. Formally, the CRDT has a state `S` and a merge function `merge(m, S)` which returns a new state `S' >= S`.
+Messages must be stored using an anonymous Δ-state CRDT and each delta type has its own CRDT. The rules of the CRDT ensure that a deltas can be added in a manner that is commutative, associative and idempotent while never moving causally backward. Formally, the CRDT has a state `S` and a merge function `merge(m, S)` which returns a new state `S' >= S`.
 
 While each CRDT has its own validations, all CRDTs must implement the following validations for a message `m`:
 
