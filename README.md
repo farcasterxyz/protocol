@@ -36,7 +36,7 @@ A [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/suffic
 
 Federated networks like ActivityPub achieve a few degrees of decentralization by allowing users to choose a trusted provider. SecureScuttlebutt eliminates servers and relies on a peer-to-peer architecture without trusted parties. Blockchain-based social networks like peepeth and steemit used public ledgers to track network state.
 
-Developments in other areas offer useful building blocks for decentralized social networks. CRDT's allow networks to reach strong eventual consistency without a coordination layer. Layer-2 blockchains show how networks can achieve greater throughput and lower costs by building on top of Layer-1's.
+Developments in other areas offer useful building blocks for decentralized social networks. [CRDT's](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) allow networks to reach strong eventual consistency without a coordination layer. Layer-2 blockchains show how networks can achieve greater throughput and lower costs by building on top of Layer-1's.
 
 ### 1.2 Proposal
 
@@ -441,7 +441,7 @@ graph TD
     SignerA1 -->  CastD[Amp]
 ```
 
-The Signer Store has a two-phase CRDT with an add-set and a remove-set for each custody address for an fid. It keeps track of custody addresses by subscribing to `Register` and `Transfer` events from the Farcaster ID Registry. When a new message `m` is merged into the store it is added to the add-set or remove-set depending on the type of message. If it is an add message, it must pass the following validations:
+The Signer Store has a two-phase CRDT[^two-phase-set] with an add-set and a remove-set for each custody address for an fid. It keeps track of custody addresses by subscribing to `Register` and `Transfer` events from the Farcaster ID Registry. When a new message `m` is merged into the store it is added to the add-set or remove-set depending on the type of message. If it is an add message, it must pass the following validations:
 
 1. `pubKey` must match the regular expression `^0x[a-fA-F0-9]{40}$`
 2. `signature_scheme` and `signature` must be an ECDSA signature
@@ -663,9 +663,6 @@ While on testnet, the core team will arbitrate conflicts and we expect to formal
 - Does the user have a reasonable claim to the name? (e.g. their name also Elon?)
 - Does the user hold similar, active handles on other networks? (e.g. they own elon on twitter and elon.ens)
 
-[^crdt]: Shapiro, Marc, et al. “Conflict-Free Replicated Data Types.” Lecture Notes in Computer Science, 2011, pp. 386–400., https://doi.org/10.1007/978-3-642-24550-3_29.
 [^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163p
 [^two-phase-set]: Shapiro, Marc; Preguiça, Nuno; Baquero, Carlos; Zawirski, Marek (2011). "A Comprehensive Study of Convergent and Commutative Replicated Data Types". Rr-7506.
 [^ed25519]: Bernstein, D.J., Duif, N., Lange, T. et al. High-speed high-security signatures. J Cryptogr Eng 2, 77–89 (2012). https://doi.org/10.1007/s13389-012-0027-1
-[^tree-crdt]: Martin, Stéphane and Ahmed-Nacer, Mehdi and Urso, Pascal.Abstract unordered and ordered trees CRDT. https://arxiv.org/abs/1201.1784
-[^zookos_triangle]: Zooko's Triangle. https://en.wikipedia.org/wiki/Zooko%27s_triangle
