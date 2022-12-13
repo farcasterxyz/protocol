@@ -23,6 +23,7 @@
 5. [Applications](#5-applications)
 6. [Upgradeability](#6-upgradeability)
    1. [Release Schedule](#61-release-schedule)
+7. [Acknowledgements](#7-acknowledgements)
 
 ## 1. Introduction
 
@@ -293,13 +294,17 @@ gantt
     v2.0.0      :done, a1, 2014-01-05  , 16w
 ```
 
-# 7. Appendix A: Delta Specifications
+# 7. Acknowledgements
 
-## 7.1 Signed Messages
+The Farcaster protocol would not have been possible without significant contributions from [Dan Romero](https://github.com/danromero), [Shane da Silva](https://github.com/sds), [Sean Yu](https://github.com/seansu4you87), [Gavi Galloway](https://github.com/gsgalloway), [Paul Fletcher-Hill](https://github.com/pfletcherhill), [Sanjay Prabhu](https://github.com/sanjayprabhu), Sagar Dhawan, [Cassandra Heart](https://github.com/CassOnMars) and [Aditya Kulkarni](https://github.com/adityapk00).
+
+# 8. Appendix A: Delta Specifications
+
+## 8.1 Signed Messages
 
 A Signed Message is a tamper-proof and self-authenticating data format that can represent a delta operation. A message is serialized as a binary [flatbuffer](https://github.com/google/flatbuffers) and is the interchange format for transmitting deltas over the Farcaster network. The specification uses an abbreviated flatbuffer-like schema to describe the data structure.
 
-### 7.1.1 Message Object
+### 8.1.1 Message Object
 
 The `Message` object contains the payload of the message in a single data object and also includes a hash, which is used as a unique identifier, and a signature, which is used to ensure that the message hasn't been tampered with and to establish the author of the delta.
 
@@ -323,7 +328,7 @@ The bytes are then passed through a signature function specified by the signatur
 - `ECDSA Scheme` - a 256-bit signature from an Ethereum address, where the signer is the address
 - `EdDSA Scheme` - a 256-bit signature from an EdDSA key pair, where the signer is the public key
 
-### 7.1.2 Message Data
+### 8.1.2 Message Data
 
 A `MessageData` object contains generic properties like the fid, network and timestamp which are common to all deltas. The type of delta is indicated by the type property and the `MessageBody` contains properties specific to the type.
 
@@ -353,7 +358,7 @@ FarcasterNetwork {
 }
 ```
 
-### 7.1.3 Message Types
+### 8.1.3 Message Types
 
 There are six types of stores on Farcaster:
 
@@ -393,7 +398,7 @@ enum MessageType {
 }
 ```
 
-### 7.1.4 Storage
+### 8.1.4 Storage
 
 Messages must be stored using an anonymous Δ-state CRDT and each delta type has its own CRDT. The rules of the CRDT ensure that a deltas can be added in a manner that is commutative, associative and idempotent while never moving causally backward. Formally, the CRDT has a state `S` and a merge function `merge(m, S)` which returns a new state `S' >= S`.
 
@@ -409,7 +414,7 @@ While each CRDT has its own validations, all CRDTs must implement the following 
 
 A lexicographical ordering of messages can be determined by comparing the values of their hashes. Assume two messages $m$ and $n$ with hashes $x$ and $y$ of length $n$ represented as strings. If the ASCII values of all character pairs $(x_1, y_1), (x_2, y_2)$ are equal, the hashes are considered equal. Otherwise, compare the first distinct pair $(x_n, y_n)$ choosing $x$ as the winner if $x_n > y_n$ or $y$ otherwises.
 
-## 7.2 Signers
+## 8.2 Signers
 
 A _Signer_ is a an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs.
 
@@ -455,7 +460,7 @@ A conflict occurs if there exists another message `n` with the same values for `
 
 The store ensures that there is a maximum of 100 signer messages per fid.
 
-## 7.3 Casts
+## 8.3 Casts
 
 A Cast is a public message created by a user which contains some text and is displayed on their account. Casts may also contain URI's pointing to media, on-chain activity or even other casts. Casts can also be removed by the user who created them at any time.
 
@@ -531,7 +536,7 @@ The conflict id $c$ for a cast-add message is the tuple `(fid, hash)` while the 
 
 The store ensures that there is a maximum of 10,000 cast messages per fid and any casts older than 1 year are expired from the set.
 
-## 7.4 Reactions
+## 8.4 Reactions
 
 A Reaction is a type of link between a user and a target which can be a cast, url or on-chain activity. The two types of reactions are likes and recasts, and the protocol can be extended to support new types. Reactions can be added and removed at any time and represent an edge in the social graph. Add and remove messages for reactions have identical bodies with different types.
 
@@ -557,7 +562,7 @@ The conflict id $c$ for any type of reaction message is the triple `(fid, castId
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 7.5 Amps
+## 8.5 Amps
 
 An Amp is a link between two users which indicates that one user is "boosting" the other. They can be added and removed at any time and represent an edge in the social graph. Add and remove messages for amps have identical bodies with different types.
 
@@ -577,13 +582,13 @@ The conflict id $c$ for any type of amp message is the tuple `(fid, userId)` and
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 7.6 Verifications
+## 8.6 Verifications
 
 A verification is a bi-directional, cryptographic proof of ownership between a Farcaster account and an external account. They can be used to prove ownership of Ethereum addresses, specific NFTs, social media accounts, or domain names.
 
 A VerificationAdd message must contain an identifier for the external account and a signature from it. Each type of verification will have its own AddMessage since they may contain different types of identifiers and signatures. The conflict id $c$ of the verification is the identifier for the external account. Verification are removed with a VerificationRemove messages that contains the conflict identifier.
 
-### 7.6.1 Verification Messages
+### 8.6.1 Verification Messages
 
 ```ts
 VerificationAddEthAddressBody {
@@ -607,7 +612,7 @@ The conflict id $c$ for any type of verification message is the tuple `(fid, add
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 7.7 User Data
+## 8.7 User Data
 
 User Data stores metadata about a user like their profile picture or display name. A fixed number of user data entries are permitted by the protocol and there is no remove operation, though values can be reset to null.
 
@@ -626,7 +631,7 @@ UserDataType {
 }
 ```
 
-### 7.7.3 User Data Store
+### 8.7.3 User Data Store
 
 The User Data Store is a grow-only set CRDT with last write wins semantics that stores user data messages in a set. The conflict id $c$ for any user data message is the tuple `(fid, dataType)` and only one message may exist per type. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
 
@@ -636,7 +641,27 @@ The User Data Store is a grow-only set CRDT with last write wins semantics that 
 
 The store also ensures that there is a maximum of 100 messages per fid.
 
-# Appendix B: Application Specifications
+# Appendix B: Proposals
+
+Many design choices have nuances and tradeoffs that are difficult to express tersely in the protocol docs. Long form proposal documents are usually produced to discuss these decisions which cover such details. This section includes links to such proposals whose design decisions are relevant to the current protocol.
+
+#### October 2022
+
+- [Decentralization of Hubs](https://hackmd.io/@farcasterxyz/ry0QL4M4o)
+- [Pruned Sets](https://hackmd.io/fCa8_RCEQ4qBYZjfnas9Zg)
+- [Farcaster Message Identifiers](https://hackmd.io/J82kyDFvT56umneqvX4IPA)
+
+#### November 2022
+
+- [Collision Attacks on Message Identifiers](https://hackmd.io/z_WWPg_4RQO8irbZepjQUA)
+- [Handling Custody Transfers Safely](https://hackmd.io/NdBdxUaCTWCbNZ7yUWStnA)
+
+#### December 2022
+
+- [Decentralizing the Social Graph](https://hackmd.io/IP-8snyMQfOGxV3LUjlJbA)
+- [Smart Contract Wallets for Farcaster](https://hackmd.io/1OpipDgCRaOdXKXQYjVuzQ)
+
+# Appendix C: Application Specifications
 
 #### Rendering Casts
 
@@ -648,7 +673,7 @@ Client should follow these rules when rendering casts:
 
 Clients may also send notifications to their users or render them as hyperlinks in their UI
 
-# Appendix C: Contract Specifications
+# Appendix D: Contract Specifications
 
 #### Username Policy
 
