@@ -2,230 +2,501 @@
 
 ![Archway](/images/arch512.png)
 
-## Contents
+## Table of Contents
 
 1. [Introduction](#1-introduction)
-2. [Concepts](#2-concepts)
-   1. [Accounts](#21-accounts)
-   2. [Signed Messages](#22-signed-messages)
-   3. [Applications](#23-applications)
-   4. [Hubs](#24-hubs)
-3. [Identity](#3-identity)
-   1. [Farcaster ID Registry (FIR)](#31-farcaster-id-registry-fir)
-   1. [Farcaster Name Registry (FNR)](#32-farcaster-name-registry-fnr)
-   1. [Recovery](#33-recovery)
-4. [Replication](#4-replication)
-   1. [Casts](#41-casts)
-   2. [Actions](#42-actions)
-   3. [Verifications](#43-verifications)
-   4. [Metadata](#44-metadata)
-   5. [Signer Authorizations](#45-signer-authorizations)
-   6. [Custody Signer Revocations](#46-root-signer-revocations)
-   7. [Sharding](#47-sharding)
-5. [Peering](#5-peering)
-6. [Releases](#6-releases)
-   1. [Hub Releases](#61-hub-releases)
-   2. [Contract Releases](#62-contract-releases)
-   3. [Protocol Releases](#63-protocol-releases)
-7. [Security Considerations](#7-security-considerations)
-   1. [Signer Compromise](#71-signer-compromise)
-   2. [Eclipse Attacks](#72-eclipse-attacks)
-   3. [Flooding Attacks](#73-flooding-attacks)
-   4. [DDOS Attacks](#74-ddos-attacks)
-   5. [Replay Attacks](#75-replay-attacks)
-8. [URIs](#8-uris)
-9. [Governance](#9-governance)
+   1. [Prior Art](#11-prior-art)
+   2. [Proposal](#12-proposal)
+2. [Identity](#2-identity)
+   1. [Farcaster ID's](#21-farcaster-ids)
+   2. [Farcaster Names ](#22-farcaster-names)
+   3. [Recovery](#23-recovery)
+3. [Delta Graph](#3-delta-graph)
+   1. [Synchronization](#31-synchronization)
+   2. [Ordering](#32-ordering)
+   3. [Authentication](#33-authentication)
+   4. [Bounding Graph Size](#34-bounding-graph-size)
+4. [Hubs](#4-hubs)
+   1. [Gossip](#41-gossip)
+   2. [Differential sync](#42-differential-sync)
+   3. [Byzantine Tolerance](#43-byzantine-tolerance)
+5. [Applications](#5-applications)
+6. [Upgradeability](#6-upgradeability)
+   1. [Release Schedule](#61-release-schedule)
 
-# 1. Introduction
+## 1. Introduction
 
-Social networks have become an essential part of our lives over the last decade. Many began their journey as open platforms, courting developers to build on their APIs. These developers created new clients, discovered new UI paradigms, and even launched multi-billion dollar businesses that brought in many users. However, networks have turned away from developers over the last few years. They have restricted APIs, implemented arbitrary review processes, and removed access with little notice or recourse.
+Social media is becoming the lens through which our society perceives the world around it. It shapes our views about our friends, colleagues, and current events in the world around us. Social media companies serve as trusted third parties that perform three functions: help billions of users establish identities, collect their updates in real-time and distribute them to peers through user-friendly apps.
 
-Farcaster is a [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) protocol that empowers developers to build novel social networks. We define a sufficiently decentralized network as one where **two users who want to communicate are always able to, even if the network wants to prevent it**. Users on such networks must have complete control over their identity (usernames), data (messages), and social graph (relationships to others). If a third party controls any of these, they can prevent two users from communicating. Developers must also be free to build applications and have unrestricted access to the network, and users must be free to switch between them. If there was only one app to connect to the network, it could prevent two users from communicating.
+Social platforms emerge as natural monopolies due to network effects. Once a network reaches critical mass, it becomes tough to compete with, leaving users with no practical alternatives. The incentive to operate in a user's best interests weakens, and the outcomes follow. Moderation and curation policies maximize ad revenues at the expense of user needs, private data isn't protected as well as it should be, and APIs for developers become restricted or non-existent.
 
-# 2. Concepts
+A [sufficiently decentralized](https://www.varunsrinivasan.com/2022/01/11/sufficient-decentralization-for-social-networks) network could align incentives between the network and its users. It can use cryptography to establish user identities and a peer-to-peer network to send data between users. Trusted third parties are unnecessary as any developer can build an app, and users can switch between them anytime. While it is harder to design and operate such a network, the aligned incentives will lead to much better long-term outcomes.
 
-Farcaster achieves sufficient decentralization through a hybrid architecture with on-chain and off-chain components.
+### 1.1 Prior Art
 
-Identities are stored on-chain in an Ethereum smart contract to leverage Ethereum's robust security, composability, and consistency guarantees. An Ethereum address controls this on-chain identity and can be used to sign off-chain messages on its behalf.
+Federated networks like ActivityPub achieve a few degrees of decentralization by allowing users to choose a trusted provider. SecureScuttlebutt eliminates servers and relies on a peer-to-peer architecture without trusted parties. Blockchain-based social networks like peepeth and steemit used public ledgers to track network state.
 
-Data is cryptographically signed by an identity and stored off-chain on user-controlled servers called Farcaster Hubs. Data is not stored on-chain because it would be prohibitively expensive and slow to settle on most L1 and L2 networks.
+Developments in other areas offer useful building blocks for decentralized social networks. [CRDT's](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) allow networks to reach strong eventual consistency without a coordination layer. Layer-2 blockchains show how networks can achieve greater throughput and lower costs by building on top of Layer-1's.
 
-<!-- Diagram covering the major architectural concepts  -->
+### 1.2 Proposal
 
-## 2.1 Accounts
+Farcaster is a decentralized social network built on top of Ethereum. The Layer 1 blockchain manages user identities, while a Layer 2 network propagates updates between users . It offers:
 
-A Farcaster account is similar to an account on pseudonymous social networks like Twitter or Reddit. Individuals can operate several accounts simultaneously, like a real-name account and a company account.
+1. Secure, memorable, and human-readable user identifiers like `@alice`
+2. Real-time settlement and propagation of changes between users.
+3. Decentralized access to all data on the network at reasonable costs.
 
-Each account has a unique number associated with it called a Farcaster ID or an `fid`. Farcaster IDs can be obtained by calling the _Farcaster ID Registry (FIR)_ from an Ethereum address. This address is known as the `custody address` and can sign off-chain and on-chain messages on behalf of the account. Users can optionally acquire a Farcaster Name or `fname` from the _Farcaster Name Registry (FNR)_ which issues it a unique name like `@alice`.
+Users start by registering a public-private key-pair and an id with an Ethereum contract. A message must include id the and a signature from the key-pair, which makes it tamper-proof and self-authenticating. Recipients can look up the key-pair associated with the id in the contract and verify the message's authenticity.
 
-## 2.2 Signed Messages
+Users upload signed messages to a Farcaster Hub, which is like a node in a blockchain network. Hubs share messages over a peer-to-peer protocol, and each Hub stores all the messages on the network. Hubs use [delta graphs](#3-delta-graph) to reach consensus about the network's state. Since updates are independent operations, delta graphs achieve consensus without coordination, forming a layer-2 storage network.
 
-Signed Messages are **tamper-proof** and **self-authenticating** objects that are signed by an fid. They represent user actions like making a public post, reacting to something or adding metadata to their account like a username.
+Developers can create desktop and mobile applications for users to interact with the network. Apps connect to Hubs and subscribe to updates from specific parts of the network relevant to the user. They can use servers to cache data, generate feeds, make recommendations and send notifications. Such apps can offer all the features and services that users have come to expect from modern social networks.
+
+```mermaid
+graph LR
+    subgraph L1 Blockchain
+        id[Farcaster Contracts]
+    end
+
+    subgraph L2 Delta Graph
+        id---hub1[<center>Farcaster Hub</center>]
+        id---hub2[<center>Farcaster Hub</center>]
+    end
+
+    hub1---app1[<center>Server</center>]
+    hub2---app2[<center>Desktop Client</center>]
+    hub2---app3[<center>Mobile Client</center>]
+
+    subgraph App3
+      app1-.-client1(Desktop Client)
+      app1-.-client2(Mobile Client)
+    end
+
+    subgraph App2
+        app2
+    end
+
+    subgraph App1
+      app3
+    end
+```
+
+# 2. Identity
+
+The identity system allows any two users on Farcaster to find each other and establish a secure communication channel. Importantly, this does not need any trusted third party in the mix. Each user's identity has three components:
+
+1. A unique, numeric identifier (e.g. `8098` )
+2. An ECDSA key-pair that can sign messages
+3. An optional, cosmetic username from a name registry (e.g. `alice`)
+
+Users must generate a new Ethereum address which serves as their key pair and use it to acquire an id, and optionally a username. The id is a canonical reference for a user on the Ethereum network. Users may pick a username from any Ethereum-based name registry to serve as a more human-readable reference. Farcaster's Ethereum contracts keep track of each user's id, key pair, and username on-chain. Ethereum's blockchain architecture ensures that ownership of identities remains decentralized and secure.
+
+## 2.1 Farcaster ID's
+
+A Farcaster ID or `fid` is the canonical identifier for a user or organization. Fids are numerical values like !8098, distinguished from other numbers by prefixing them with an exclamation mark. Users register fids to an Ethereum address, also known as the `custody address`. Users can transfer fids to a new custody address, though each address can own exactly one fid at a time.
+
+Users must call the [Farcaster ID Registry](https://github.com/farcasterxyz/contracts/) contract and pay a small amount of gas to request an fid. The contract issues a new unique, 256-bit unsigned integer which becomes the fid. Anyone can inspect the contract to determine the custody address that owns an fid.
+
+Users can sign a message containing their fid with the ECDSA key pair of their custody address. Recipients can verify its authenticity by looking up the custody address in the ID Registry and verifying the signature. No-one can reclaim or revoke an fid once a custody address claims it. This ensures sufficient decentralization by allowing tamper-proof communication over untrusted networks without requiring trusted third parties.
+
+## 2.2 Farcaster Names
+
+A Farcaster name or `fname` is an optional, human-readable identifier for users and organizations. Fnames are alpha-numeric like @alice, distinguished from other text by prefixing it with an at-symbol. Users can get register an fname to a custody address, which can own more than one name at a time.
+
+Fnames must be unique and match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. While Ethereum has many namespaces, fnames have unique properties that make them very useful in social networks. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack), and are [recoverable](#33-recovery).
+
+User register fnames for a year at at ime by paying a fee to the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/), which issues each one as an NFT. The protocol's core team periodically sets the fee rate to a value that makes squatting less practical. An fname becomes renewable ninety days before it expires. Once expired, fnames enter a dutch auction where the price is set to a yearly fee plus a premium, which decays until it reaches zero.
+
+## 2.3 Recovery
+
+Users may appoint a recovery address to protect their fnames and fids in case they lose access to the custody address. The recovery address can request a transfer to a new custody address, executable after a three-day escrow.
+
+Ownership of fids and fnames remains decentralized because unauthorized recoveries are preventable. During the escrow period the owner can cancel a transfer and revoke a malicious recovery address. The request completes only if the user permits it to happen or if they no longer have access to their custody address.
+
+The registry contracts allow recovery addresses to be set at any time and to any address. Users may configure them to point to a backup address, a friend's wallet, a multi-sig, or even a third-party recovery service. This system only protects against address loss, and not address compromise.
+
+# 3. Delta-Graph
+
+A delta graph is a data structure that represents and synchronizes a social network's state between many replicas. The state of the social network is a graph where each vertex is an entity like a user or message, and each edge is a relationship between entities. A network where @alice creates a message and @bob likes and replies to it would produce this graph:
+
+```mermaid
+graph LR
+  M1([Hello World!]) -->|author| A(alice)
+  M2([Welcome!]) --> |author| B(bob)
+  M2 --> |reply-to|M1
+  B --> |likes|M1
+
+  style A text-align:left
+  style B text-align:left
+  style M1 text-align:left
+  style M2 text-align:left
+```
+
+The graph decomposes into a series of deltas $\delta$ which help with synchronization over an unreliable network. A delta is an action a user takes, like posting a message or liking something. There are six types of deltas defined by the Farcaster protocol:
+
+1. **casts**, which are messages from a user
+2. **reactions**, which are reactions to a user's messages from another user (e.g., a like)
+3. **amps**, which are amplifications or endorsements of a user
+4. **verifications**, which are proofs of ownership (e.g., an Ethereum address signature)
+5. **signers**, which are key pairs authorized by a user to sign their deltas
+6. **user data**, which are metadata about the user (e.g., their profile picture)
+
+Each delta is an atomic operation that may add one or more vertices or edges to the social graph. Some deltas may add multiple nodes and edges in a single action. Consider @bob's reply-cast to @alice's cast which must add a new entity (the cast) and set up two relationships, one to bob as the author and the other to alice's cast as the parent. The graph in the example above can be broken down into the following deltas:
+
+```mermaid
+flowchart TD
+    W2(<b>add-cast</b> <br> message: Hello World! <br>  author: alice <br><br> )
+    W3(<b>add-cast</b> <br> message: Welcome! <br>  author: bob <br> reply-to: Hello World! <br> )
+    W1(<b>add-reaction</b> <br> type: Like <br>  author: bob <br> target: Hello World! <br> )
+
+
+    style W1 text-align:left
+    style W2 text-align:left
+    style W3 text-align:left
+```
+
+## 3.1 Synchronization
+
+Delta graphs must be able to synchronize the social graph across an unreliable network. Synchronization is straightforward if a set of deltas always produce the same graph when combined in any order, and dropped messages can be re-shared between replicas safely without corrupting the graph's state. Our design goal, in formal terms, is to simplify syncing by making deltas commutative, associative, and idempotent across the graph.
+
+Idempotency requires that a delta is not applied to a graph more than once. If @alice likes @bob's cast, but she sends the delta twice by accident, it must not count as two likes. Deltas must include a unique identifier $i$, which is the hash digest of the bytes of the delta operation. The delta graph checks any new delta's identifier against all known deltas sand discards it if it is a duplicate.
+
+Commutativity and associativity require that a set of deltas always produce the same graph. If @alice likes @bob's cast and unlikes it later, that generates two conflicting deltas that change the same part of the graph. Deltas must have a conflict identifier $c$ and a total ordering scheme. The delta graph discards the delta with the lowest order whenever two deltas have the same $c$ value.
+
+A delta's conflict identifier $c$ must uniquely identify the edges and vertices that it modifies. Deltas with the same $c$ must change the same parts of the graph, and deltas with distinct $c$ values must alter different parts of the graph. In the like and unlike example, the triple `(bob, like, Hello World!)` is sufficient as a $c$ value for both deltas. A delta must also have a user-reported timestamp $t$, which along with the identifier $i$ can produce a total ordering. A last-write-wins scheme might compare $t$ values numerically and then $i$ values lexicographically. Such an ordering would be deterministic across replicas since it does not depend on the time of receipt.
+
+A CRDT, or conflict-free replicated datatype, stores deltas using the rules described above. Each delta type has its own CRDT, which may include rules specific to the particular type and resembles an anonymous, delta-state CRDT[^delta-state]. The delta graph is therefore a collection of multiple CRDTs which combine to
+Each CRDTs
+
+> Formally, the delta graph $G = \{C_1, C_2,... \}$, CRDT $C =\{ \delta_1, \delta_2, ... \}$ and $merge(\delta_n, C_n)$ produces $C_n' \geq C_n$.
+
+## 3.2 Ordering
+
+Deltas have a **timestamp order** which derives from user-reported timestamps. Timestamp order is partial since many messages can have the same timestamp. It helps with ordering messages in user interfaces like chronological feeds and profiles. It is untrustworthy since it is user-controlled and has a similar trust model to timestamps observed on websites and blogs.
+
+Deltas also have a **lexicographical hash order** derived from the hash digest of the operation itself. Lexicographical hash order is total since each message has a unique hash value. It is arbitrary but deterministic, and CRDTs use it in combination with the timestamp order to resolve conflicts.
+
+Deltas may have an optional, **causal order** set by the user. For instance, a reply cast may contain a reference to its parent cast to help clients reconstruct the conversation thread. Causal ordering is partial since it is optional in some delta types. The ordering is deterministic and meaningful and is useful to applications when rendering content.
+
+## 3.3 Authentication
+
+Users are only allowed to modify certain parts of the delta graph. For example, @bob can subscribe to @alice but cannot make @alice subscribe to @charlie. Each delta type may define different rules governing what a user can change. Users authenticate deltas by hashing and signing them with an asymmetric key pair. Signatures make the delta tamper-proof, allowing transmission over untrusted networks. CRDTs check the signatures and the segments of the graph modified by the user and only merge changes that pass both validations.
+
+Users must sign every delta with an EdDSA key pair known as a _signer_. A user can create multiple signers and assign one to each Farcaster application they use. A Signer CRDT tracks each user's valid signer key pairs, and other CRDTs will accept only accept deltas signed by these key pairs. Users add signers by producing a special signer delta signed by their custody address. A signer delta is the only delta that has an ECDSA signature and it forms a chain of trust linking an on-chain identity to an off-chain delta. Users can revoke signers if they suspect a compromise, which evicts all deltas authorized by the signer.
+
+```mermaid
+graph LR
+    Custody([Eth Custody Address]) --> |Signer Delta, ECDSA Sig|SignerA1([Farcaster Signer])
+    SignerA1 -->  |Cast Delta, EdDSA sig|CastC[Hello World!]
+    SignerA1 -->  |Cast Delta, EdDSA sig|CastD[It's Alice!]
+```
+
+## 3.4 Bounding Graph Size
+
+A delta-graph that can grow forever will adversely impact decentralization by making a hub's storage costs very expensive. The number of hub operators will decrease over time, and their ability to collude and block participants will grow. We aim to have at least 100 hubs across many geographies to ensure decentralization. To achieve this, hubs must be operable on affordable commodity cloud hardware, which has at most 64 TB of attached storage.
+
+Deltas are only permitted to contain a small amount of text, and larger payloads must be stored by reference. They must be small enough to fit into a single TCP packet. Special-purpose storage systems like IPFS can host larger payloads, and applications can hydrate them at render time.
+
+Users can only store a finite number of deltas of each type. The protocol selects limits that will keep the size of the delta graph under 64 TB. CRDTs enforce the size limit by evicting the message in the graph with the earliest ordering. Since deltas are always totally ordered, this does not change the CRDT's guarantees.
+
+Users are only permitted to store certain deltas for a fixed time. Expiring very old deltas allows us to reclaim space, allowing more generous limits for recent messages. This is particularly useful for noisy data types like reactions where users place a greater value on recency. Time-based expiration of deltas can be deterministic as long as hubs control for clock skew and drift.
+
+# 4. Hubs
+
+A Hub is a replica or node in the Farcaster network that synchronizes the delta graph. It is conceptually like a blockchain node but with a different consensus mechanism. Hubs receive deltas from clients over APIs and transmit them to other hubs over a peer-to-peer protocol. They listen to updates from the Ethereum blockchain and update the identity state of the delta graph as needed. Hubs conform to standards that allow different implementations to be interoperable.
+
+## 4.1 Gossip
+
+Hubs communicate with their peers over a gossip protocol implemented with libp2p. Each Hub is bootstrapped with a list of peers, which it can use to discover more peers. When a hub finds a new delta, it broadcasts it to its peers, which repeat the same process propagating the update across the network.
+
+Gossip alone does not guarantee strong eventual consistency since deltas can go missing or arrive in the wrong order. Missing deltas happen because the UDP protocol is lossy and does not guarantee delivery or ordering. Ordering is vital for convergence because Signer CRDTs must be synchronized before other CRDTs.
+
+## 4.2 Differential Sync
+
+Hubs employ an out-of-band protocol to deal with gossip's lossiness. Each Hub maintains a merkle-patricia trie of delta identifiers that it knows about, and gossip messages include the root of this trie. A hub that receives a gossip message adds the delta's identifier into its trie. The Hubs are out of sync if the local trie root does not match the one included in the gossip messages.
+
+An out-of-band sync process occurs where the recipient hub compares its merkle trie with the senders. If the sender has new messages unknown to the recipient, the latter fetches them using the former's gRPC APIs. If the recipient is the one with new messages, the sync process terminates.
+
+The sender will eventually sync back with the recipient when it receives a gossip message or after a time if no gossip message was observed. The sync process must ensure that the blockchain state is as up-to-date as possible since Signer CRDTs depend on it. Due to the signer dependencies, it must also sync Signer CRDTs before syncing any other CRDT types.
+
+Hubs whose clocks are out of sync may have CRDTs in different states due to the time-based delta pruning. Such hubs may never converge if the network is noisy enough and the skew between clocks is large enough. CRDTs must round timestamps down to the nearest 10th second before expiring them to mitigate this problem.
+
+## 4.3 Byzantine Tolerance
+
+Peer may be malfunctioning or malicious, and sync must succeed even under such adversarial conditions. One peer can DDOS another, inhibiting its ability to stay in sync. Peers can also drop certain messages, which causes synchronization thrash. If coordinated at a large scale, it can even result in an eclipse attack where a user's messages appear to be missing from the network.
+
+Hubs must maintain identity key pairs used to authenticate their requests. Each Hub has exponential back-off rate limits per identity, which prevents a DDOS from overwhelming the network. They also implement a scoring system for their peers that tracks how "out of sync" a peer remains and, over time, will drop low-scoring peers.
+
+# 5. Applications
+
+An _application_ is a program that people use to interact with the Farcaster network. It should control a key-pair that can sign messages and maintain a connection to a Hub to publish signed messages. Users can choose the type of application that best suits their needs and switch between them at any time.
+
+A simple application might consist of a standalone desktop or mobile client that talks directly to a Farcaster Hub. It can publish new messages and view messages published by other fids. Such applications are **self-hosted** and must be instantiated with the custody address or a [signer](#52-signers).
+
+A more sophisticated application might add a proxy backend server that indexes data from Hubs. Indexing allows servers to implement features like search, algorithmic feeds, and spam detection that are difficult or expensive to perform on the Hub. Such applications can be **self-hosted** by storing keys on the client; **delegated** by asking users for a signer; or **hosted** by managing all keys including the custody address.
+
+# 6. Upgradeability
+
+Farcaster is designed to be upgradeable and this section covers how changes to the protocol can be proposed, how consensus is built around those changes and how they are implemented and released. During beta, the process is lightweight to encourage community participation and rapid development cycles. As we move to finalizing the protocol on mainnet stricter controls will be put in place to ensure that the protocol remains credibly neutral and that changes are safe, well tested and have passed thorough review.
+
+New changes can be proposed by opening up a new discussion topic in the [protocol](https://github.com/farcasterxyz/protocol/discussions), hub or contract repositories. The community can comment and make suggestions and the core team will make the final decision on accepting changes. The core team controls access to the Github repositories and accepts changes. Once approved, an issue is created and the specification changes are merged into this repository.
+
+The Farcaster core team will work closely with Hub operators and application developers to ensure that changes land smoothly with minimal disruption to the network. Hub operators also have a veto over changes to the Hub, which they can exercise by not upgrading their version of the Hub. It is desirable for developers and operators to have this power to ensure decentralization of the network, but ideally they would never need to exercise it.
+
+## 6.1 Release Schedule
+
+Farcaster is intended to be a long-lived protocol and built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers. Users are expected to be on the latest release soon after it comes out.
+
+The versioning system reflects this and notably does not follow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases increment the patch version. So a successful first release would bump the version to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`.
+
+#### Protocol Releases
+
+Protocol documentation in this repository will change in lockstep with contract and hub versions. Tagging and releases will follow the same structure that the Hubs employ.
+
+#### Contract Releases
+
+Contracts that are upgradable will be updated on an as-needed basis, and we expect this to be extremely rare. Unlike Hubs, contracts do not follow any pre-determined release schedule. If a contract is not dependent on any hub changes it can be deployed at any time. If it is dependent on hub changes, the hub release must ship and the 4 week waiting period must pass before the contract can be safely deployed.
+
+Contract versions are set to the version of the hub they depend on, or the most recent release if they are not dependent on any specific version. The version is also tracked in the Solidity class name to keep track of upgrades. So the first version would be `IdRegistry_2`, while an upgrade made after Hub `v2.1.1` would be called `IdRegistry_2_1_1`.
+
+#### Hub Releases
+
+Hub operate on a _release train_ where a new version is released every 12 weeks to the Farcaster mainnet. To encourage frequent updates, Hubs are programmed to shut down 16 weeks after their release date, giving operators 4 weeks to upgrade to the latest version. The new release is also programmed to stop peering with older versions 4 weeks after its release to ensure that the network safely cuts over.
+
+Backwards incompatible Hub changes can be introduced safely with feature flags in the release train system. The feature can be programmed to turn on after the 4 week point, when older hubs are guaranteed to be disconnected from the network. Hubs can use the Ethereum block timestamp to co-ordinate their clocks and synchronize the cut over.
+
+Farcaster will also operate a devnet, where new builds are released every week and one or more testnets, where a build is released 4 weeks before the mainnet release. Every release to devnet, testnet and mainnet branches from main and stabilizes, allowing main to continue moving forward with changes.
+
+```mermaid
+gantt
+    title Lifecycle of a Hub Release
+    dateFormat  YYYY-MM-DD
+    axisFormat  Week %W
+
+    section Devnet
+    v2.1.0-dev-1     :b1, 2014-01-05, 1w
+    v2.1.0-dev-2     :b2, after b1, 1w
+    v2.1.0-dev-3     :b3, after b2, 1w
+    v2.1.0-dev-4     :b4, after b3, 1w
+    v2.1.0-dev-5     :b5, after b4, 1w
+    v2.1.0-dev-6     :b6, after b5, 1w
+    v2.1.0-dev-7     :b7, after b6, 1w
+    v2.1.0-dev-8     :b8, after b7, 1w
+
+    section Testnet
+    v2.1.0      :after c2, 8w
+    v2.1.0-test :c2, after c1, 4w
+    v2.0.0      :done, c1, 2014-01-05, 8w
+
+    section Mainnet
+    v2.1.0      :2014-03-31, 8w
+    v2.0.0      :done, a1, 2014-01-05  , 16w
+```
+
+# 7. Appendix A: Delta Specifications
+
+## 7.1 Signed Messages
+
+A Signed Message is a tamper-proof and self-authenticating data format that can represent a delta operation. A message is serialized as a binary [flatbuffer](https://github.com/google/flatbuffers) and is the interchange format for transmitting deltas over the Farcaster network. The specification uses an abbreviated flatbuffer-like schema to describe the data structure.
+
+### 7.1.1 Message Object
+
+The `Message` object contains the payload of the message in a single data object and also includes a hash, which is used as a unique identifier, and a signature, which is used to ensure that the message hasn't been tampered with and to establish the author of the delta.
 
 ```ts
-type SignedMessage = {
-  message: {
-    body: any;
-    fid: number;
-    timestamp: number;
-  };
-  envelope: {
-    hash: string;
-    hashType: 'BLAKE2b';
-    signature: string;
-    signatureType: 'ed25519' | 'ecdsa-secp256k1';
-    signerPubKey: string;
-  };
+Message {
+  data: MessageData;               // variable length message data object
+  hash: [ubyte];                   // 16-byte hash digest of the message payload
+  hash_scheme: Enumeration;        // 1-byte hash scheme enum (e.g. BLAKE3)
+  signature: [ubyte];              // 32-byte signature of the message payload
+  signature_scheme: Enumeration;   // 1-byte signature scheme enum (e.g. EdDSA)
+  signer: [ubyte];                 // 20-byte address or 32-byte public key that signed the message
+}
+```
+
+The bytes of data are first passed through a hash function denoted by the hash_scheme which must be one of:
+
+- `Blake3 Scheme` - a 128-bit digest produced using [BLAKE3](https://github.com/BLAKE3-team/BLAKE3)
+
+The bytes are then passed through a signature function specified by the signature scheme, which must be one of:
+
+- `ECDSA Scheme` - a 256-bit signature from an Ethereum address, where the signer is the address
+- `EdDSA Scheme` - a 256-bit signature from an EdDSA key pair, where the signer is the public key
+
+### 7.1.2 Message Data
+
+A `MessageData` object contains generic properties like the fid, network and timestamp which are common to all deltas. The type of delta is indicated by the type property and the `MessageBody` contains properties specific to the type.
+
+```ts
+MessageData {
+  body: MessageBody;             // variable length message body, schema depends on type
+  fid: [ubyte];                  // variable length farcaster id of the user (max: 32 bytes)
+  network: Enumeration;          // 1-byte enumeration indicating the farcaster network
+  type: Enumeration;             // 1-byte enumeration indicating message type
+  timestamp: uint32;             // 4-byte epoch timestamp in seconds
+}
+```
+
+#### Timestamps
+
+Messages must contain a `timestamp` which is an epoch timestamp in milliseconds. The start of the epoch is Jan 1st 2021, 0:00:00 GMT and all seconds are incremented from it. Timestamps cannot be set to future values since Hubs will reject messages that are ahead of their system clock.
+
+#### Network
+
+Messages must also specify a network value which determines which Farcaster network the message belongs to. Hubs connect to one specific network and will reject messages with other network identifiers, preventing replay attacks.
+
+```ts
+FarcasterNetwork {
+  Mainnet = 1,
+  Testnet = 2,
+  Devnet = 3
+}
+```
+
+### 7.1.3 Message Types
+
+There are six types of stores on Farcaster:
+
+1. `Signers` - key pairs authorized to sign messages on behalf of a user
+2. `Cast` - public, text messages published by users
+3. `Reactions` - a graph relationship between a user and an object
+4. `Amp` - a graph relationship between two users
+5. `Verifications` - proofs of ownership of assets created by a user
+6. `UserData` - user metadata added by the user
+
+MessageType and MessageBody indicate the action being performed and the payload provided along with the action. For example, the action `ReactionRemove` may be selected with then requires the `ReactionBody` type which has information about the reaction being removed.
+
+```ts
+MessageBody {
+  CastAddBody,
+  CastRemoveBody,
+  ReactionBody,
+  AmpBody,
+  VerificationAddEthAddressBody,
+  VerificationRemoveBody,
+  SignerBody,
+  UserDataBody
+}
+
+enum MessageType {
+  CastAdd = 1,
+  CastRemove = 2,
+  ReactionAdd = 3,
+  ReactionRemove = 4,
+  AmpAdd = 5,
+  AmpRemove = 6,
+  VerificationAddEthAddress = 7,
+  VerificationRemove = 8,
+  SignerAdd = 9,
+  SignerRemove = 10,
+  UserDataAdd = 11
+}
+```
+
+### 7.1.4 Storage
+
+Messages must be stored using an anonymous Δ-state CRDT and each delta type has its own CRDT. The rules of the CRDT ensure that a deltas can be added in a manner that is commutative, associative and idempotent while never moving causally backward. Formally, the CRDT has a state `S` and a merge function `merge(m, S)` which returns a new state `S' >= S`.
+
+While each CRDT has its own validations, all CRDTs must implement the following validations for a message `m`:
+
+1. `m.signer` must be a valid signer in the Signer CRDT for `message.fid`
+2. `hash(data))` must match `m.hash`, where hash is specified by `hash_scheme`
+3. `verify(m.data, m.signer, m.signature)` must be true, where verify is specified by `signature_scheme`
+4. `m.data.timestamp` must be no more than 1 minute ahead of the system clock.
+5. `m.data.fid` must be a known fid number in the ID Registry.
+
+#### Ordering
+
+A lexicographical ordering of messages can be determined by comparing the values of their hashes. Assume two messages $m$ and $n$ with hashes $x$ and $y$ of length $n$ represented as strings. If the ASCII values of all character pairs $(x_1, y_1), (x_2, y_2)$ are equal, the hashes are considered equal. Otherwise, compare the first distinct pair $(x_n, y_n)$ choosing $x$ as the winner if $x_n > y_n$ or $y$ otherwises.
+
+## 7.2 Signers
+
+A _Signer_ is a an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs.
+
+```ts
+type SignerAddBody = {
+  pubKey: string; // public key of the EdDSA key pair
+};
+
+type SignerRemoveBody = {
+  pubKey: string; // public key of the EdDSA key pair
 };
 ```
 
-A Signed Message has a **message** property that contains the payload. The payload is then serialized, hashed, and signed by a valid key-pair, like the custody address. The **envelope** contains the hash, signature, and the public key of the signing key-pair, which any recipient can use to validate that the fid signed the message.
+Signers also become inactive if their custody address become inactive, which happens when the user transfer their fid to another Ethereum address. Inactive signers are still considered valid for a period of 60 minutes after their custody address becomes inactive after which they are evicted. The grace period allows users to transfer their custody address and preserve their history by re-authorizing the same signers from the new address.
 
-The message must be serialized with [RFC-8785](https://datatracker.ietf.org/doc/html/rfc8785), hashed with [BLAKE2b](https://www.rfc-editor.org/rfc/rfc7693.txt) and signed with an Ed25519 signature scheme. Each message must also contain an fid to look up the custody address on-chain and a timestamp for ordering.
+```mermaid
+graph TD
+    Custody1([Custody Address 1]) -.-> SignerA([Signer KeyPair A])
+    Custody1 -.->  SignerB([Signer KeyPair B])
+    style Custody1 stroke-dasharray: 5 5
+    style SignerA stroke-dasharray: 5 5
+    style SignerB stroke-dasharray: 5 5
 
-## 2.3 Applications
-
-An _application_ is a program that people use to interact with the Farcaster network. Users can choose the type of application that best suits their needs and switch between them at any time.
-
-A simple application might consist of a standalone desktop or mobile client that talks directly to a Farcaster Hub. It can publish new messages and view messages published by other fids. Such applications are **self-hosted** and must be instantiated with the custody address or [valid signing key](#45-signer-authorizations).
-
-A more sophisticated application might add a proxy backend server that indexes data from Hubs. Indexing allows servers to implement features like search, algorithmic feeds, and spam detection that are difficult or expensive to perform on the Hub. Such applications can be **self-hosted** by storing keys on the client; **delegated** by asking users for a [delegate signing key](#45-signer-authorizations); or **hosted** by managing all keys including the custody address.
-
-## 2.4 Hubs
-
-A Hub is an always-on server that validates, stores, and replicates Signed Messages.
-
-Users select a Hub as their _home_ and publish its URL on-chain using the FIR. Their followers can use this URL to find and download their messages. Users can run the home Hub themselves or use a third-party hosting service. They are incentivized to ensure that it works correctly, or their followers will not receive their messages.
-
-Users can also configure their home Hub to replicate data from other Hubs. If Alice follows Bob and Charlie, who use separate Hubs, she can configure her Hub to download messages from theirs. When her client comes online, it can make a single request to her Hub and fetch Bob and Charlie's messages.
-
-Hubs maintain a connection to the FIR to validate every Signed Message they receive. A malicious Hub that served a forged message would be detected because the message authentication would fail. This property of Signed Messages lets us safely receive messages signed by _any_ user from _any_ Hub. If Bob has a copy of Charlie's messages, Alice's server can download them and save a round trip to Charlie's Hub. Hubs can fetch data from nearby peers using a gossip-based pubsub protocol [^gossip-sub] instead of making a round trip to each user's home Hub.
-
-Conceptually, Hubs form an **L2 network for storing social data**, though the network has different properties from blockchain-based L2s. Its consensus model has weaker consistency guarantees but stronger scalability guarantees because the network data is **shardable** down to the fid level.
-
-# 3. Identity
-
-The Farcaster Identity system must ensure that user accounts:
-
-1. Can be owned in a secure, decentralized manner
-2. Are easy to recognize visually when using a social network
-3. Are quick and easy to set up (< 1 minute of work, ~ 10 USD)
-4. Are recoverable if lost, without compromising decentralization.
-
-These goals are challenging to achieve within an identity system because they are often in conflict. For instance, having a decentralized and trustworthy namespace is hard. A fully decentralized namespace could not prevent an early user from squatting `@elonmusk`, and a heavily squatted namespace is not very useful.
-
-Farcaster balances these goals with two separate systems - a **Farcaster ID Registry (FIR)**, which issues new id numbers called `fids`, and a **Farcaster Name Registry (FNR)**, which issues new usernames called `fnames`. Fids are secure, decentralized identifiers present in every message that are conceptually similar to uuids. Fnames, on the other hand, are primarily cosmetic modifiers that replace the fid at render time and can be changed at any time. The separation of an identity into these two components allows us to achieve our goals at the cost of adding some complexity to the system. Both systems also implement a recovery mechanism that protects against loss of the key-pair controlling the name without compromising decentralization.
-
-## 3.1 Farcaster ID Registry (FIR)
-
-Farcaster ID's are numeric identifiers that are spiritually similar to uuids. When displayed to a user they are presented with a preceding exclamation point (e.g. `!8098`).
-
-An fid represents a unique entity, like a person or organization. Every message or follow that references the entity must do so by using its fid and not its fname. The fid costs a small amount of gas to register and is owned for life. The FID contract is straightforward and cannot be upgraded or modified in any way, ensuring that fids are maximally decentralized.
-
-Fids start at 0 and are incremented by one every time a new registration happens, which is a gas-efficient way to ensure unique account numbers. An fid is stored on-chain as a uint256 which guarantees a near infinite supply since it can be incremented to ~ 10^77. Fids can be transferred between addresses, though the FIR ensures that an address owns only one fid at a time.
-
-Users can use the FIR to configure a _Home URL_ which can be used to find the location of their off-chain messages. Typically this is set to the Hub that the user uploads their data to and helps with discovery. It is optional and emitted as an on-chain event.
-
-## 3.2 Farcaster Name Registry (FNR)
-
-Farcaster Names are unique, 16 character alphanumeric names similar to usernames on other networks. When displayed to a user, they are presented with a preceding at-symbol (e.g. `@alice`).
-
-An fname, along with a profile picture, display name and verification marks, help visually identify an entity when browsing a network. Unlike fids, fnames are mainly cosmetic and have no bearing on the underlying data created by the user. Ownership of an fname is not permanent and users must pay a yearly renewal fee set by governance. Renewals can be made up to 90 days before an fname expires. Expired names are auctioned in a Dutch Auction where bidders must pay the yearly fee plus a premium which starts at 1000 ETH. The premium decreases by 10% every 8 hours until it reaches 0 ETH.
-
-Fnames are issued as NFT's by the Farcaster Name Registry on a first-come-first-serve basis. Each name must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. They have specific properties that make them useful in a social network relative to other namespaces like ENS. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack) because of the restricted character set and also [recoverable](#33-recovery). Farcaster does not mandate the usage of an fname, and users are free to use alternate namespaces with their `fids`.
-
-Giving up a username does not affect sufficient decentralization. Farcaster is designed around the fid and every message and action points to it. Fnames can be changed at any time without losing a single follower or cast. A user who gives up one name can purchase another and continue using the app, or even elect not to have an fname and just use their fid.
-
-#### Username Policy
-
-Usernames are free to register during beta and are governed by a simple policy. The policy aims to prevent names from being squatted by inactive users or used maliciously to impersonate others. A solution to this problem cannot be easily automated and requires human judgment to enforce (for now). The username policy has two central tenets:
-
-1. **Impersonation** - If you register a username that belongs to a well-known public person or entity, your name may be deregistered. e.g. `@elonmusk`, `@vitalikbuterin`, `@google` or `@whitehouse`.
-
-2. **Inactivity** — If you’re not actively using a username for 60+ days, your name may be de-registered on request from another user, or at our discretion.
-
-We expect that human intervention is often needed since there can be reasonable conflicts. For instance, you register `@vitalik` and Vitalik Buterin signs up after you and wants the name. In such a case, we would ask three questions that guide the decision:
-
-- Is the user active and engaged on Farcaster? (e.g. if they have made high-quality posts in the last few months)
-- Does the user have a reasonable claim to the name? (e.g. if their name is also Vitalik)
-- Does the user hold similar, active handles on other networks? (e.g. if they own vitalik on twitter and vitalik.ens)
-
-If the answer to most of these questions is yes, they will retain claim to their name. While on testnet, the core team will arbitrate such conflicts and we expect to formalize a governance system around this as we approach mainnet. Users will not be refunded if a name is reclaimed as a result of arbitration.
-
-## 3.3 Recovery
-
-Farcaster IDs and Names are recoverable if the user loses the keys to the address holding them. Both contracts implement a time-delayed recovery system that allows a **recovery address** to request a transfer to a new address. If the custody address does not cancel the transfer within three days, the recovery address can complete the transfer.
-
-Users can set the recovery address to another address in their wallet, a multi-sig shared with friends, or a third-party recovery service. Users can also change the recovery address at any time. Ownership remains decentralized because the recovery address cannot make a transfer that the custody address does not approve.
-
-Transferring the asset to a new custody address will unset the recovery address. Otherwise, users may purchase a name on OpenSea only to have the previous owner claim it back stealthily with their recovery address.
-
-# 4. Replication
-
-_Replication_ is the process by which Hubs accept new messages and determine a user's state.
-
-Users send [messages](#22-signed-messages) to a Hub for every action they take. If a user likes a URL, unlikes it, and likes it again, that creates three messages. A Hub that receives all messages will determine the current state of the URL as _liked by the user_. The Hub can discard the first two messages to save space since they are no longer needed. Hubs may condense messages like this using a merge operation, which avoids client-level disagreement and saves space. Messages may have different rules for their merge operations. For example, two likes on the same cast by a user can be condensed into one, while two replies cannot.
-
-A Hub may fail to receive some messages from a user and end up in a partial state. For instance, it may just get the first like and the unlike which sets the current state to _not liked by the user_. The merge operation should allow such partial merges to move the state forward and reach consistency when the missing messages are re-broadcast. In other words, the merge should ensure [strong eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency#Strong_eventual_consistency).
-
-Hubs achieve this by implementing a [CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) Set for each message type which encodes specific validation and merge rules. This property makes Hubs highly available since they can go offline at any time and always get back into sync. Formally, our CRDT sets are anonymous Δ-state CRDTs[^delta-state], and each message is a join-irreducible update on the set.
-
-<!-- Diagram of all user data types -->
-
-#### Message Ordering
-
-Sets can order Signed Messages by their timestamp to resolve merge conflicts with a last write wins strategy. However, they cannot guarantee perfect ordering since timestamps are vulnerable to [clock skew](https://en.wikipedia.org/wiki/Clock_skew), [clock drift](https://en.wikipedia.org/wiki/Clock_drift), spoofing from malicious users and may collide for valid reasons. Applications can use [hybrid clocks](https://martinfowler.com/articles/patterns-of-distributed-systems/hybrid-clock.html) to generate perfectly ordered timestamps that do not collide, but we cannot enforce their usage.
-
-Instead, we define an ordering system for messages that ensures total ordering by using timestamps to determine initial order and hashes to break conflicts. Total ordering is guaranteed because two messages cannot have the same hash unless they are the same message. Two messages `a` and `b` can be compared with this algorithm:
-
-- If `a.timestamp > b.timestamp`, `a` is greater.
-- If `a.timestamp < b.timestamp`, `b` is greater
-- If `a.timestamp == b.timestamp`
-  - If `a.hash > b.hash`, `a` is greater
-  - If `a.hash < b.hash`, `b` is greater
-  - If `a.hash = b.hash`, `a == b`
-
-Timestamps are compared as numbers, and hashes are compared as strings. Since string comparison can vary across implementations, we must be precise in our comparison algorithm. We say that two hashes `x` and `y` can be compared by comparing each pair of characters, starting from the first:
-
-- If all character pairs are equal and `x` and `y` terminate, then `x == y`
-- If all character pairs are equal and `x` terminates first, then `y > x`
-- If a differing character pair `xC, yC` is encountered, then `y > x` if `ASCII(yC) > ASCII(xC)`
-
-#### Message Validation
-
-All messages must pass the following validations in addition to specific validations for the message type:
-
-1. `message.timestamp` is not more than 1 hour ahead of system time.
-2. `message.fid` must be a known fid number in the FIR.
-3. `signerPubKey` should be a valid [Custody Signer or Delegate Signer](#45-signer-authorizations) for `message.fid`
-4. `hashFn(serializeFn(message))` must match `envelope.hash`, where hashFn is a Blake2B function and serializeFn performs JSON canonicalization.
-5. `EdDSA_signature_verify(envelope.hash, envelope.signerPubKey, envelope.signature)` should pass.
-
-## 4.1 Casts
-
-A _Cast_ is a public message created by a user which contains text and can also embed media, on-chain activity or other casts. Casts are stored in a two-phase set CRDT[^two-phase-set] that resolves conflicts between messages.
-
-A Cast can be added with a `CastAdd` message which is placed in the CRDT's **add-set**. Each cast is indexed by its hash which is guaranteed to be unique unless the casts are identical. By extension, two add messages can never conflict unless they are identical, in which case one can be discarded safely.
-
-A Cast can be removed with a `CastRemove` message which contains a reference to the target `CastAdd`'s hash. When received, the target is removed from the add-set if present and the remove is added to the **rem-set**. Conflicts between adds and removes are handled with Remove-Wins rules and conflicts between removes are handled with Last-Write-Wins rules, falling back to lexicographical ordering in case of a tie.
-
-### 4.1.1 Add Messages
-
-A _Cast Add_ can contain up to 320 characters of unicode text and two URI's that can have up to 256 characters. Clients are responsible for unpacking and rendering the URI's along with the text.
-
-```ts
-type CastAddBody = {
-  embed: {
-    items: URI[];
-  };
-  parent?: URI;
-  text: string;
-};
+    Custody2([Custody Address 2]) --> SignerA1([Signer KeyPair A])
+    Custody2 -->  |ECDSA Signature|SignerC([Signer KeyPair C])
+    SignerC -->  CastA[Cast]
+    SignerC -->  |EdDSA Signature| CastB[Cast]
+    SignerA1 -->  CastC[Cast]
+    SignerA1 -->  CastD[Amp]
 ```
 
-A cast without a `parent` is a top-level cast, which clients should display on the user's profile or timeline. A cast with a `parent` is a reply to another cast, web URL or on-chain object which should be displayed in a thread.
+The Signer Store has a two-phase CRDT[^two-phase-set] with an add-set and a remove-set for each custody address for an fid. It keeps track of custody addresses by subscribing to `Register` and `Transfer` events from the Farcaster ID Registry. When a new message `m` is merged into the store it is added to the add-set or remove-set depending on the type of message. If it is an add message, it must pass the following validations:
 
-Casts form a series of trees where each root is a Cast or URI and each child node is a reply cast. Each tree can be rendered as a threaded conversation. Trees are guaranteed to be acyclic because a parent must be hashed and signed before a child can point to it. Any change to the parents data will break all relationships with its children.
+1. `pubKey` must match the regular expression `^0x[a-fA-F0-9]{40}$`
+2. `signature_scheme` and `signature` must be an ECDSA signature
+3. `signer` must match that of a valid custody address
+
+A conflict occurs if there exists another message `n` with the same values for `m.data.fid`, `m.signer` and `m.body.pubKey`. In such cases, the following logic is followed by the merge function:
+
+1. If the timestamps are distinct, retain the message with the highest timestamps and discard the other one.
+2. If the timestamps are identical, and one message is a remove and the other is an add, retain the remove and discard the add.
+3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
+
+The store ensures that there is a maximum of 100 signer messages per fid.
+
+## 7.3 Casts
+
+A Cast is a public message created by a user which contains some text and is displayed on their account. Casts may also contain URI's pointing to media, on-chain activity or even other casts. Casts can also be removed by the user who created them at any time.
+
+```ts
+CastAddBody {
+  embeds: [string];
+  mentions: [UserId];
+  parent: CastId;
+  text: string (required);
+}
+
+CastRemoveBody {
+  targetHash: string;
+};
+
+
+CastId {
+  fid: [ubyte] (required);
+  ts_hash: [ubyte] (required);
+}
+
+UserId {
+  fid: [ubyte] (required);
+}
+```
+
+#### Mentions
+
+A user can _mention_ another Farcaster user inside cast by including their fid between a % symbol block. . A user can mention two users alice and bob, who have usernames @alice and @bob and fids 123 and 456 with the cast below.
+
+```ts
+{
+  text: "hello %0% and %1%",
+  mentions: [123, 456],
+  ...
+}
+```
+
+#### Replies
+
+A cast can be structured as replies to other casts or even non-cast objects like URL's, creating threaded conversations. An optional `parent` URI allows casts to indicate their parent which can be a cast, url or on-chain event. A threaded conversation of casts is a tree and the set of casts form a series of acyclic trees.
 
 ```mermaid
 graph TB
@@ -243,325 +514,155 @@ graph TB
     J-->L([cast:0x...dc1])
 ```
 
-A Cast message must pass the following validation steps:
+#### Store
 
-1. `text` must contain <= 320 valid unicode characters
-2. `embed` must contain between 0 and 2 `items`
-3. `item` must be a URI of at most 256 characters
-4. `parent`, if present, must be a valid URI not equal to this message's URI (e.g. `fid:<fid>/cast:<hash>`)
+The Cast Store is a two-phase set CRDT which tracks and and remove cast messages. A cast add message must follow these rules:
 
-### 4.1.2 Remove Messages
+1. `embeds` must contain between 0 and 2 URIs, each of which can be up to 256 characters
+2. `mentions` must contain between 0 and 5 Farcaster IDs
+3. `parent`, if present, must be a valid URI pointing
+4. `text` must contain <= 320 valid unicode characters
 
-A _Cast Remove_ only contains a reference to the hash of the _Cast Add_. It allows for permanent deletion of casts while eliding the data of the original cast.
+The conflict id $c$ for a cast-add message is the tuple `(fid, hash)` while the $c$ for a cast-remove message is `$(fid, targetHash)`. If a new message `m` is received that has an $c$ identical to that of another message `n`, it creates a conflict which is resolved with the following rules:
 
-```ts
-type CastRemoveBody = {
-  hash: string;
-};
-```
+1. If one message is a remove and the other is an add, retain the remove and discard the add.
+2. If the messages are of the same time and the timestamps are distinct, retain the one with the highest timestamp.
+3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-The message must pass the following validation steps:
+The store ensures that there is a maximum of 10,000 cast messages per fid and any casts older than 1 year are expired from the set.
 
-1. `message.data.body.hash` must not equal the `message.envelope.hash`.
-2. `message.timestamp` must be <= system clock + 10 minutes
-3. `message.data.fid` must be a known fid in the FIR
+## 7.4 Reactions
 
-### 4.1.3 Merge Rules
-
-When an add message `a` is received:
-
-1. If there exists `r` in the rem-set such that `r.data.body.hash` equals `a.hash`, discard `a`
-2. Otherwise, add `a` into the add-set.
-
-When a remove message `r` is received:
-
-1. If there is an `a` in the add-set where `a.hash` equals `r.data.body.hash`, delete it.
-2. If there is an `r'` in the rem-set where `r.data.body.hash` equals `r'.data.body.hash`
-   - If `r' > r`, discard `r'`
-   - If `r' < r`, delete `r` and add `r'` into the rem-set
-3. Otherwise, add `r` to the rem-set.
-
-## 4.2 Actions
-
-An action is a public operation performed by the user on a target, which can be another user, cast or on-chain activity. Two types of actions are supported today: **likes** and **follows**. The protocol can be extended to support new actions easily. Users can undo and redo actions by toggling the `active` property on the message. Conceptually, each action is an edge in a social graph.
+A Reaction is a type of link between a user and a target which can be a cast, url or on-chain activity. The two types of reactions are likes and recasts, and the protocol can be extended to support new types. Reactions can be added and removed at any time and represent an edge in the social graph. Add and remove messages for reactions have identical bodies with different types.
 
 ```ts
-type Action = {
-  message: {
-    body: {
-      active: boolean;
-      type: 'like' | 'follow';
-      targetUri: FarcasterURI;
-      schema: 'farcaster.xyz/schemas/v1/action';
-    };
-    fid: number;
-    timestamp: number;
-  };
-};
+ReactionBody {
+  cast: CastId;
+  type: ReactionType;
+}
+
+ReactionType {
+  Like = 1,
+  Recast = 2
+}
 ```
 
-#### Message Validation
+#### Store
 
-1. `schema` must be known.
-2. `active`, `type` must be present and match types.
-3. `targetUri` must be a valid FarcasterURI and must not reference this message.
+The Reaction Store is a two-phase set CRDT with last write wins semantics that stores add and remove reaction messages. Each user may store a maximum of 5,000 messages and messages may have a maximum age of 3 months.
 
-#### Set Construction
+The conflict id $c$ for any type of reaction message is the triple `(fid, castId, type)` and only one reaction may exist per triple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
 
-Actions are managed with an [LWW-Element-Set CRDT](<https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)>) which guarantees strong eventual consistency. Conceptually, there is a single **set** that stores all messages and conflicts are resolved by timestamp and lexicographical hash order. An addition is performed by constructing an `Action` message `a` where `active` is true, while a remove is performed by setting `active` to false. In both cases, the logic for merging the message into the set is:
+1. If timestamps are distinct, retain the one with the highest timestamp.
+2. If one message is a remove and the other is an add, retain the remove and discard the add.
+3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-1. If there is an action `x` in the set with the same values for `type`, `targetUri` and `fid` as the incoming action `y`:
-   - If `x > y`, discard `y`
-   - If `x < y`, delete `x` and add `y` into the set
-2. Otherwise, add `y` into the set.
+## 7.5 Amps
 
-## 4.3 Verifications
-
-Verifications are bi-directional proofs of ownership between Farcaster accounts and external entities. Verifications can be used to prove ownership of Ethereum addresses, specific NFTs, other social media accounts, or even domains.
-
-Verifications have three core concepts:
-
-1. A claim that includes a reference to a Farcaster account and the external entity. The claim can be hashed to create a unique identifier for each claim.
-2. A directional proof from the external entity that is authorized to make the claim, showing intent to connect it to the Farcaster account.
-3. A directional proof from the Farcaster account accepting the request to associate the claim with the Farcaster account.
-
-Verification claims are structured as `VerificationClaim` objects:
+An Amp is a link between two users which indicates that one user is "boosting" the other. They can be added and removed at any time and represent an edge in the social graph. Add and remove messages for amps have identical bodies with different types.
 
 ```ts
-type VerificationClaim = {
-  externalUri: URI;
-  account: number;
-  blockHash: string;
-};
+table AmpBody {
+  user: UserId (required);
+}
 ```
 
-Verifications are added via `VerificationAdd` messages and removed via `VerificationRemove` messages. Here are the types for the add and remove message bodies:
+#### Store
+
+The Amp Store is a two-phase set CRDT with last write wins semantics that stores add and remove amp messages in separate sets. The store also ensures that there is a maximum of 100 messages per fid and messages may have a maximum age of 3 months.
+
+The conflict id $c$ for any type of amp message is the tuple `(fid, userId)` and only one amp may exist per tuple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the rules:
+
+1. If timestamps are distinct, retain the one with the highest timestamp.
+2. If one message is a remove and the other is an add, retain the remove and discard the add.
+3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
+
+## 7.6 Verifications
+
+A verification is a bi-directional, cryptographic proof of ownership between a Farcaster account and an external account. They can be used to prove ownership of Ethereum addresses, specific NFTs, social media accounts, or domain names.
+
+A VerificationAdd message must contain an identifier for the external account and a signature from it. Each type of verification will have its own AddMessage since they may contain different types of identifiers and signatures. The conflict id $c$ of the verification is the identifier for the external account. Verification are removed with a VerificationRemove messages that contains the conflict identifier.
+
+### 7.6.1 Verification Messages
 
 ```ts
-type VerificationAddBody = {
-  externalUri: string;
-  claimHash: string;
-  blockHash: string;
-  externalSignature: string;
-  externalSignatureType: 'eip-191-0x45'; // Will support other types over time
-  schema: 'farcaster.xyz/schemas/v1/verification-add';
-};
+VerificationAddEthAddressBody {
+  address: [ubyte];
+  eth_signature: [ubyte];     // must be an  [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature
+  block_hash: [ubyte];
+}
 
-type VerificationRemoveBody = {
-  claimHash: string;
-  schema: 'farcaster.xyz/schemas/v1/verification-remove';
-};
+table VerificationRemoveBody {
+  address: [ubyte] (required);
+}
 ```
 
-The `VerificationAddBody` does not include the full claim object, because the claim can be reconstructed from the `externalUri` and `account` attributes of the add message.
+#### Store
 
-#### Message Validation
+The Verification Store is a two-phase set CRDT with last write wins semantics that stores add and remove verification messages in separate sets. Each user can store a maximum of 50 messages, after which the oldest messages by timestamp-hash order are expired.
 
-The `envelope` of `VerificationAdd` and `VerificationRemove` messages is validated the [same as other message types](#message-validation).
+The conflict id $c$ for any type of verification message is the tuple `(fid, address)` and only one verification may exist per tuple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
 
-Here are rules for `VerificationAdd` messages:
+1. If timestamps are distinct, retain the one with the highest timestamp.
+2. If one message is a remove and the other is an add, retain the remove and discard the add.
+3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-1. `schema` must be known
-2. `externalUri` must be present
-3. `claimHash` must be present and match `hashFn(claim)`
-4. `blockHash` must be known
-5. `externalSignatureType` must be known
-6. `externalSignature` must be valid according to custom rules depending on `externalSignatureType`, which are defined in the subsections below
+## 7.7 User Data
 
-Here are rules for `VerificationRemove` messages:
-
-1. `schema` must be known
-2. `claimHash` must be present
-
-#### Set Construction
-
-Verifications are stored in the Verifications Set, which is a modified [Last-Write-Wins-Element Set](<https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)>). Valid and unremoved verifications are stored as `VerificationAdd` messages in the `adds` set. Removed verifications are stored as `VerificationRemove` messages in the `removes` set. Messages are indexed by `claimHash` and a particular claim cannot exist in both sets simultaneously.
-
-Verifications can be re-added once they've been removed, and conflicts are resolved using timestamp with a preference towards remove messages when timestamps match. If two messages of the same operation (i.e. two adds or two removes) and same timestamp conflict, the one with the higher lexicographical message hash wins out.
-
-Verification information like the external entity address is effectively hidden once a verification is removed, because the `VerificationRemove` message only contains the claim hash.
-
-When a verification add message `a` is received:
-
-1. If `a` exists in the `removes` set
-   1. If existing remove message is more recent or has the same timestamp, discard `a`
-   2. Otherwise, move `a` to `adds` set
-2. If `a` exists in the `adds` set
-   1. If existing add message is more recent or has the same timestamp with a higher lexicographical message hash, discard `a`
-   2. Otherwise, overwrite `a` in the `adds` set with the new message
-3. If `a` does not exist in either set
-   1. Add `a` to `adds` set
-
-When a verification remove message `b` is received:
-
-1. If `b` exists in the `removes` set
-   1. If existing remove message is more recent or has the same timestamp with a higher lexicographical message hash, discard `b`
-   2. Otherwise, overwrite `b` in the `removes` set with the new message
-2. If `b` exists in the `adds` set
-   1. If existing add message is more recent, discard `b`
-   2. Otherwise, move `b` from `adds` to `removes`
-3. If `b` does not exist in either set
-   1. Add `b` to `removes` set
-
-### 4.3.1 Ethereum EIP 191 version 0x45 address verifications
-
-The first type of verification supported is a self-authenticating proof of ownership of an Ethereum address. Here are custom message validation rules for this verification type:
-
-- `externalSignatureType` must be `eip-191-0x45`
-- `externalSignature` must be a valid [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature (i.e. Ethereum's `personal_sign`) of the `claimHash`, signed by `externalUri`
-
-## 4.4 Metadata
-
-_This section is still under development and will cover a CRDT for allowing arbitrary metadata to be added to a user's account like a display name or profile picture._
-
-## 4.5 Signer Authorizations
-
-_This section is still under development._
-
-A _Signer Authorization_ is a message that authorizes a new key pair to generate signatures for a Farcaster account.
-
-When an fid is minted, only the custody address can sign messages on its behalf. Users might not want to load this key-pair into every device since it increases the risk of account compromise. The custody address, also known as the _Custody Signer_, can authorize other key-pairs known as _Delegate Signers_. Unlike Custody Signers, a Delegate Signer is only allowed to publish off-chain messages and cannot perform any on-chain actions.
+User Data stores metadata about a user like their profile picture or display name. A fixed number of user data entries are permitted by the protocol and there is no remove operation, though values can be reset to null.
 
 ```ts
-type SignerAuthorizationMessage = {
-  fid: number;
-  active: boolean;
-  authorizedPublicKey: string;
-  schema: 'farcaster.xyz/schemas/v1/signer';
-};
+UserDataBody {
+  type: UserDataType = 1;
+  value: string;
+}
+
+UserDataType {
+  Pfp = 1,
+  Display = 2,
+  Bio = 3,
+  Location = 4,
+  Url = 5
+}
 ```
 
-Custody Signers generate ECDSA signatures on the secp256k1 curve and can only publish Signer Authorization messages. All other types of messages must be signed by Delegate Signers, which creates EdDSA signatures on Curve25519[^ed25519]. Delegate Signers can be used to authorize new devices or even third-party services to sign messages for an account. If a Delegate Signer is compromised, it can be revoked by itself, an ancestor in its chain of trust, or any Custody Signer. When a Signer is revoked, Hubs discard all of its signed messages because there is no way to tell the user's messages from the attackers.
+### 7.7.3 User Data Store
 
-Users might also transfer an fid to a new custody address due to key recovery or changing wallets. It is usually desirable to preserve history and therefore both custody addresses become valid Custody Signers. The set of valid signers for an fid form a series of distinct trees. Each tree's root is a historical custody address, and the leaves are delegate signers.
+The User Data Store is a grow-only set CRDT with last write wins semantics that stores user data messages in a set. The conflict id $c$ for any user data message is the tuple `(fid, dataType)` and only one message may exist per type. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
 
-<!-- Diagram of Signer Tree -->
+1. If timestamps are distinct, retain the one with the highest timestamp.
+2. If one message is a remove and the other is an add, retain the remove and discard the add.
+3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-The Signer Set is a modified two-phase set with remove-wins and last-write-wins semantics. New messages are added to the set if signed by a valid delegate or custody signer. A remove message is accepted if signed by itself or by an ancestor. A Signer can never be re-added once removed, and all of its descendant children and messages are discarded.
+The store also ensures that there is a maximum of 100 messages per fid.
 
-A Set conflict can occur if two valid Signers separately authorize the same Delegate Signer, which breaks the tree data structure. If this occurs, the Set retains the message with the highest timestamp and lexicographical hash, in that order.
+# Appendix B: Application Specifications
 
-## 4.6 Custody Signer Revocations
+#### Rendering Casts
 
-_This section is still under development._
+Client should follow these rules when rendering casts:
 
-A Custody Signer Revocation is a special message that is used to remove previous custody addresses from the list of valid signers. This is useful if you believe that a previous address may have become compromised or if you are changing ownership of an fid.
+- Match all mentions in text with `/\%[0-4]\%/gm` and for each match `n` look up corresponding `fid` located at `mentions[n]`
+- Replace all mention matches (`%<num>%`) in text with `@fname` if it exists or the matched `!fid` otherwise.
+- Hyperlink all mention matches to the user's profile page.
 
-A revocation must include the blockhash of a specific Ethereum block. It must be signed by a custody address that owned it at the end of that block or afterwards. When received, the custody address at the end of the block specified is considered the first valid custody signer. All previous custody addresses and delegate signers issued by them are invalidated.
+Clients may also send notifications to their users or render them as hyperlinks in their UI
 
-```ts
-type RootRevocationBody = {
-  blockHash: string;
-  schema: 'farcaster.xyz/schemas/v1/root-revocation';
-};
-```
+# Appendix C: Contract Specifications
 
-## 4.7 Sharding
+#### Username Policy
 
-Hubs can replicate data for specific accounts only, which is a useful property for scaling the network. If Farcaster grows large enough that a single server cannot support a Hub that replicates the entire network, the workload can be sharded across multiple Hubs. Hub operators can also avoid syncing data for users who are behaving maliciously or not relevant to the operator.
+Usernames are free to register during beta and are governed by a simple policy that prevents squatting and impersonation. The policy is manually enforced for now since it is not easy to automate and has two tenets:
 
-Selective replication only provides a partial view of the network. If a Hub is syncing Alice's data it will become aware that she replied and liked one of Bob's posts. However, it will not know the contents of Bob's post, or the fact that Bob liked her reply and then proceeded to reply to it. An application that seeks to provide accurate like counts and serve up all the replies to a message should replicate as many users as possible.
+1. If you register an fname connected to a well-known public person or entity, your name may be deregistered. (e.g. `@google`)
+2. If don't actively use an fname for 60+ days, your name may be de-registered at our discretion.
 
-# 5. Peering
+While on testnet, the core team will arbitrate conflicts and we expect to formalize a governance system as we approach mainnet. Human intervention is often needed to resolve reasonable conflicts. For instance, you register `@elon` and Elon Musk signs up after you and wants the name. In such a case, we would ask three questions that guide the decision:
 
-_This section is still under development and covers the peer discovery mechanisms_
+- Is the user active on Farcaster? (e.g. they've made several high quality posts in the last 60 days)
+- Does the user have a reasonable claim to the name? (e.g. their name also Elon?)
+- Does the user hold similar, active handles on other networks? (e.g. they own elon on twitter and elon.ens)
 
-# 6. Releases
-
-Farcaster is intended to be a long-lived protocol and built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers. Users are expected to be on the latest release soon after it comes out.
-
-The versioning system reflects this and notably does not follow semantic versioning. Instead, the version number will be initialized to `2.0.0` and planned releases increment the minor version while unplanned releases increment the patch version. So a successful first release would bump the version to `2.1.0` while a hotfix released right after would bump it to `2.1.1` and the next planned release would bump it to `2.2.0`.
-
-## 6.1 Hub Releases
-
-Hub operate on a _release train_ where a new version is released every 12 weeks to the Farcaster mainnet. To encourage frequent updates, Hubs are programmed to shut down 16 weeks after their release date, giving operators 4 weeks to upgrade to the latest version. The new release is also programmed to stop peering with older versions 4 weeks after its release to ensure that the network safely cuts over.
-
-Backwards incompatible Hub changes can be introduced safely with feature flags in the release train system. The feature can be programmed to turn on after the 4 week point, when older hubs are guaranteed to be disconnected from the network. Hubs can use the Ethereum block timestamp to co-ordinate their clocks and synchronize the cut over.
-
-Farcaster will also operate a devnet, where new builds are released every week and one or more testnets, where a build is released 4 weeks before the mainnet release. Every release to devnet, testnet and mainnet branches from main and stabilizes, allowing main to continue moving forward with changes.
-
-```mermaid
-gantt
-    title Lifecycle of a Hub Release
-    dateFormat  YYYY-MM-DD
-    axisFormat  Week %W
-
-
-    section Devnet
-    v2.1.0-dev-1     :b1, 2014-01-05, 1w
-    v2.1.0-dev-2     :b2, after b1, 1w
-    v2.1.0-dev-3     :b3, after b2, 1w
-    v2.1.0-dev-4     :b4, after b3, 1w
-    v2.1.0-dev-5     :b5, after b4, 1w
-    v2.1.0-dev-6     :b6, after b5, 1w
-    v2.1.0-dev-7     :b7, after b6, 1w
-    v2.1.0-dev-8     :b8, after b7, 1w
-
-
-    section Testnet
-    v2.1.0      :after c2, 8w
-    v2.1.0-test :c2, after c1, 4w
-    v2.0.0      :done, c1, 2014-01-05, 8w
-
-
-    section Mainnet
-    v2.1.0      :2014-03-31, 8w
-    v2.0.0      :done, a1, 2014-01-05  , 16w
-```
-
-## 6.2 Contract Releases
-
-Contracts that are upgradable will be updated on an as-needed basis, and we expect this to be extremely rare. Unlike Hubs, contracts do not follow any pre-determined release schedule. If a contract is not dependent on any hub changes it can be deployed at any time. If it is dependent on hub changes, the hub release must ship and the 4 week waiting period must pass before the contract can be safely deployed.
-
-Contract versions are set to the version of the hub they depend on, or the most recent release if they are not dependent on any specific version. The version is also tracked in the Solidity class name to keep track of upgrades. So the first version would be `IdRegistry_2`, while an upgrade made after Hub `v2.1.1` would be called `IdRegistry_2_1_1`.
-
-## 6.3 Protocol Releases
-
-Protocol documentation in this repository will change in lockstep with contract and hub versions. Tagging and releases will follow the same structure that the Hubs employ.
-
-# 7. Security Considerations
-
-## 7.1 Signer Compromise
-
-A malicious attacker can use a compromised delegate signer to impersonate the user by signing messages. As long as the user has control over a parent signer or the custody signer, they can invalidate the signature and issue a new one. Unfortunately, this means that all messages signed by that signer will be lost since we cannot tell which ones were signed by the attacker. Clients can mitigate this by constantly rolling keys after every few thousand messages, which limits the scope of how many messages will be lost when a signer is reset.
-
-## 7.2 Eclipse Attacks
-
-A malicious user could spin up several Hubs which pretend that a target user has published zero messages. Peers might assume this to be true, effectively blocking the target from the network. Hubs can maintain an internal score for each peer based on data availability. Periodically, they lookup the location of the user's source Hub which is published in the FIR and sync the latest messages. If their peers do not have an up-to-date copy of this, their scores are lowered until eventually the peer is dropped and a new one is selected.
-
-## 7.3 Flooding Attacks
-
-A flooding attack is when a malicious user keeps acquiring new accounts and broadcasting thousands of messages. Hubs may attempt to sync this data bloating their on-disk storage and causing network congestion which leads to stale data for legitimate user accounts. An account scoring system can help alleviate this by prioritizing trustworthy accounts and temporarily or permanently banning misbehaving accounts. Each Hub tracks its own score for an account which starts at zero. The score increases if the account has a valid username and a history of behaving well. It decreases when malicious behavior like flooding is observed.
-
-## 7.4 DDOS Attacks
-
-A DDOS attack is when a malicious Hub spams a target Hub with queries that are expensive to run causing it to stop responding to legitimate requests and syncing with other Hubs. A simple mitigation strategy is to implement IP-based rate limiting that rejects query requests from Hubs when they exceed a threshold. More sophisticated DDOS attacks might require whitelisting a set of known peers or relying on infrastructure-level DDOS protection services offered by cloud vendors.
-
-## 7.5 Replay Attacks
-
-A replay attack is when a malicious actor stores a copy of a user's message and is able to replay it to cause an action that the user did not intend. This attack is possible if a Signer is removed, since it may delete a message that causally removed a prior message from the state. Assume Alice added a "hello world" cast with Signer A and then deleted it with Signer B and then proceeded to delete Signer B. At this point, the cast is no longer present on the Hub but neither is the delete message. A malicious user with a copy of the "hello world" cast could replay it causing it to be accepted as valid. Fortunately, the attack is restricted to replaying previously valid messages and Alice can issue a remove message from a currently valid signer to nullify it.
-
-# 8. URIs
-
-This section is still under development and will cover a schema for URIs supported by Farcaster Message types.
-
-# 9. Governance
-
-Farcaster is a decentralized protocol that is not controlled by a single individual, and governance is the process of making protocol changes in a decentralized way. The process is kept lightweight during beta to encourage community contributions and rapid development cycles.
-
-Anyone can propose a change by opening up a [new discussion topic](https://github.com/farcasterxyz/protocol/discussions) in the protocol repository. The Farcaster team will provide feedback and may ask for more details. Once all feedback has been provided the Farcaster team will decide whether to include the change in the roadmap or whether to reject it. Once approved, an issue is created and the specification changes are merged into this repository.
-
-## Hub Changes
-
-Changes that involve off-chain systems must be implemented and deployed in the Hubs. The Farcaster team will work closely with Hub developers and operators to pick a release date that will ensure a smooth transition. The Farcaster team is also responsible for ensuring that there is strong alignment around implementing the changes.
-
-Developers and operators can veto a change if they disagree with it, but at some cost to themselves and the network. An operator may choose not to upgrade their Hub version and a developer can choose not to release the change. This will cause fragmentation and users on such Hubs may not be visible to the rest of the network. It is desirable for developers and operators to have this power to ensure decentralization of the network, but ideally they would never need to exercise it.
-
-## Contract Changes
-
-Changes that involve on-chain systems must be implemented by deploying a new contract or upgrading an existing one. The Farcaster team will implement these changes and ensure that they are thoroughly audited. Contracts will be controlled by a multi-sig whose ownership is split between members of the Farcaster team during beta. Over time, control over making contract changes will be decentralized to other parties who have a vested interest in ensuring the success of the network.
-
-[^gossip-sub]: Dimitris Vyzovitis, Yusef Napora, Dirk McCormick, David Dias, Yiannis Psaras: “GossipSub: Attack-Resilient Message Propagation in the Filecoin and ETH2.0 Networks”, 2020; [http://arxiv.org/abs/2007.02754 arXiv:2007.02754].
 [^delta-state]: van der Linde, A., Leitão, J., & Preguiça, N. (2016). Δ-CRDTs: Making δ-CRDTs delta-based. Proceedings of the 2nd Workshop on the Principles and Practice of Consistency for Distributed Data. https://doi.org/10.1145/2911151.2911163p
 [^two-phase-set]: Shapiro, Marc; Preguiça, Nuno; Baquero, Carlos; Zawirski, Marek (2011). "A Comprehensive Study of Convergent and Commutative Replicated Data Types". Rr-7506.
 [^ed25519]: Bernstein, D.J., Duif, N., Lange, T. et al. High-speed high-security signatures. J Cryptogr Eng 2, 77–89 (2012). https://doi.org/10.1007/s13389-012-0027-1
