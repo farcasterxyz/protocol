@@ -17,8 +17,9 @@
    3. [Authentication](#33-authentication)
    4. [Bounding Graph Size](#34-bounding-graph-size)
 4. [Hubs](#4-hubs)
-   1. [Peering](#41-peering)
-   2. [Synchronization](#42-synchronization)
+   1. [Gossip](#41-gossip)
+   2. [Differential sync](#42-differential-sync)
+   3. [Byzantine Tolerance](#43-byzantine-tolerance)
 5. [Applications](#5-applications)
 6. [Upgradeability](#6-upgradeability)
    1. [Release Schedule](#61-release-schedule)
@@ -202,23 +203,29 @@ Users are only permitted to store certain deltas for a fixed time. Expiring very
 
 # 4. Hubs
 
-A Hub is a peer node in the Farcaster network responsible for synchronizing the delta graph. It listens to updates from clients, peers and the ethereum contracts and re-broadcasts them to other peers on the network. Conceptually, it is similar to a blockchain node through it uses a different mechanism for consensus. Each Hub must confirm to a set of standards around message encoding, client apis and peer-to-peer apis which makes different implementations fully interoperable.
+A Hub is a replica or node in the Farcaster network that synchronizes the delta graph. It is conceptually like a blockchain node but with a different consensus mechanism. Hubs receive deltas from clients over APIs and transmit them to other hubs over a peer-to-peer protocol. They listen to updates from the Ethereum blockchain and update the identity state of the delta graph as needed. Hubs conform to standards that allow different implementations to be interoperable.
 
-## 4.1 Peering
+## 4.1 Gossip
 
-Hubs maintain connections to multiple peers in the network at any given time. Each Hub is bootstrapped with at least one active peer through which it discovers the list of other peers on the network. Peers are selected using an algorithm that optimizes the topology of the network to minimize hops to deliver messages across the entire network.
+Hubs communicate with their peers over a gossip protocol implemented with libp2p. Each Hub is bootstrapped with a list of peers, which it can use to discover more peers. When a hub finds a new delta, it broadcasts it to its peers, which repeat the same process propagating the update across the network.
 
-Hubs communicate with their peers using two channels - a **udp gossip protocol**, which is fast but lossy and a **tcp grpc protocol**, which is reliable but slow. The libp2p standard is used to establish gossip connections and maintain the address book of peers which a custom grpc protocol and apis are specific for the tcp connections.
+Gossip alone does not guarantee strong eventual consistency since deltas can go missing or arrive in the wrong order. Missing deltas happen because the UDP protocol is lossy and does not guarantee delivery or ordering. Ordering is vital for convergence because Signer CRDTs must be synchronized before other CRDTs.
 
-Peers may be malicious or malfunctioning and can spam hubs with messages (ddos attack) or simply not broadcast or accept certain messages (eclipse attack). Hubs must implement rate limits from peers and a scoring mechanism to rank and prioritize peers to listen to based on how well they stay in sync with the network.
+## 4.2 Differential Sync
 
-## 4.2 Synchronization
+Hubs employ an out-of-band protocol to deal with gossip's lossiness. Each Hub maintains a merkle-patricia trie of delta identifiers that it knows about, and gossip messages include the root of this trie. A hub that receives a gossip message adds the delta's identifier into its trie. The Hubs are out of sync if the local trie root does not match the one included in the gossip messages.
 
-Hubs guarantee **strong eventual consistency**, which promises that two hubs connected to each other will eventually reach the same state if no new updates are introduced. Two hubs have the same state if their delta-graphs are identical, which in turn means that they have the exact same set of deltas.
+An out-of-band sync process occurs where the recipient hub compares its merkle trie with the senders. If the sender has new messages unknown to the recipient, the latter fetches them using the former's gRPC APIs. If the recipient is the one with new messages, the sync process terminates.
 
-Synchronization between hubs is optimistically performed by sharing deltas over gossip and falling back to a more thorough differential sync if the states fail to converge. Hubs use a merkle-patricia trie to track the ids of all known deltas. When a new delta is received and merged, hubs re-broadcast this delta along with the root of the merkle trie. A recipient merges the delta and adds the id into its trie and checks if the roots match. If they do not, it assumes that some messages were missed and performs a full sync by comparing tries and requesting missing ids over grpc apis.
+The sender will eventually sync back with the recipient when it receives a gossip message or after a time if no gossip message was observed. The sync process must ensure that the blockchain state is as up-to-date as possible since Signer CRDTs depend on it. Due to the signer dependencies, it must also sync Signer CRDTs before syncing any other CRDT types.
 
-Ordering of messages can affect convergence since signer deltas influence whether other deltas are accepted by CRDTs. While gossip cannot control for this, differential sync should prioritize merging signers before other message types. Convergence is also affected by blockchain state and Hubs may not converge if one has viewed new state on the blockchain and the other has not. Convergence is also affect by difference in hub clocks caused due to clock drift and clock skew. Since CRDT's expire deltas based on their timestamp, two hubs may not converge if they have seen the same set of updates but their clocks have different values. This can be minimized by rounding timestamps down to the nearest 10th second when applying expiration rules in CRDTs.
+Hubs whose clocks are out of sync may have CRDTs in different states due to the time-based delta pruning. Such hubs may never converge if the network is noisy enough and the skew between clocks is large enough. CRDTs must round timestamps down to the nearest 10th second before expiring them to mitigate this problem.
+
+## 4.3 Byzantine Tolerance
+
+Peer may be malfunctioning or malicious, and sync must succeed even under such adversarial conditions. One peer can DDOS another, inhibiting its ability to stay in sync. Peers can also drop certain messages, which causes synchronization thrash. If coordinated at a large scale, it can even result in an eclipse attack where a user's messages appear to be missing from the network.
+
+Hubs must maintain identity key pairs used to authenticate their requests. Each Hub has exponential back-off rate limits per identity, which prevents a DDOS from overwhelming the network. They also implement a scoring system for their peers that tracks how "out of sync" a peer remains and, over time, will drop low-scoring peers.
 
 # 5. Applications
 
