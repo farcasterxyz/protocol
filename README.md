@@ -641,7 +641,27 @@ The User Data Store is a grow-only set CRDT with last write wins semantics that 
 
 The store also ensures that there is a maximum of 100 messages per fid.
 
-# Appendix B: Application Specifications
+# Appendix B: Proposals
+
+Many design choices have nuances and tradeoffs that are difficult to express tersely in the protocol docs. Long form proposal documents are usually produced to discuss these decisions which cover such details. This section includes links to such proposals whose design decisions are relevant to the current protocol.
+
+#### October 2022
+
+- [Decentralization of Hubs](https://hackmd.io/@farcasterxyz/ry0QL4M4o)
+- [Pruned Sets](https://hackmd.io/fCa8_RCEQ4qBYZjfnas9Zg)
+- [Farcaster Message Identifiers](https://hackmd.io/J82kyDFvT56umneqvX4IPA)
+
+#### November 2022
+
+- [Collision Attacks on Message Identifiers](https://hackmd.io/z_WWPg_4RQO8irbZepjQUA)
+- [Handling Custody Transfers Safely](https://hackmd.io/NdBdxUaCTWCbNZ7yUWStnA)
+
+#### December 2022
+
+- [Decentralizing the Social Graph](https://hackmd.io/IP-8snyMQfOGxV3LUjlJbA)
+- [Smart Contract Wallets for Farcaster](https://hackmd.io/1OpipDgCRaOdXKXQYjVuzQ)
+
+# Appendix C: Application Specifications
 
 #### Rendering Casts
 
@@ -653,7 +673,7 @@ Client should follow these rules when rendering casts:
 
 Clients may also send notifications to their users or render them as hyperlinks in their UI
 
-# Appendix C: Contract Specifications
+# Appendix D: Contract Specifications
 
 #### Username Policy
 
