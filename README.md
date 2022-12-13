@@ -180,7 +180,7 @@ Deltas may have an optional, **causal order** set by the user. For instance, a r
 
 ## 3.3 Authentication
 
-Users are only allowed to modify certain parts of the delta graph. For example, @bob can follow @alice but cannot make @alice follow @charlie. Each delta type may define different rules governing what a user can change. Users authenticate deltas by hashing and signing them with an asymmetric key pair. Signatures make the delta tamper-proof, allowing transmission over untrusted networks. CRDTs check the signatures and the segments of the graph modified by the user and only merge changes that pass both validations.
+Users are only allowed to modify certain parts of the delta graph. For example, @bob can subscribe to @alice but cannot make @alice subscribe to @charlie. Each delta type may define different rules governing what a user can change. Users authenticate deltas by hashing and signing them with an asymmetric key pair. Signatures make the delta tamper-proof, allowing transmission over untrusted networks. CRDTs check the signatures and the segments of the graph modified by the user and only merge changes that pass both validations.
 
 Users must sign every delta with an EdDSA key pair known as a _signer_. A user can create multiple signers and assign one to each Farcaster application they use. A Signer CRDT tracks each user's valid signer key pairs, and other CRDTs will accept only accept deltas signed by these key pairs. Users add signers by producing a special signer delta signed by their custody address. A signer delta is the only delta that has an ECDSA signature and it forms a chain of trust linking an on-chain identity to an off-chain delta. Users can revoke signers if they suspect a compromise, which evicts all deltas authorized by the signer.
 
@@ -360,7 +360,7 @@ There are six types of stores on Farcaster:
 1. `Signers` - key pairs authorized to sign messages on behalf of a user
 2. `Cast` - public, text messages published by users
 3. `Reactions` - a graph relationship between a user and an object
-4. `Follow` - a graph relationship between two users
+4. `Amp` - a graph relationship between two users
 5. `Verifications` - proofs of ownership of assets created by a user
 6. `UserData` - user metadata added by the user
 
@@ -371,7 +371,7 @@ MessageBody {
   CastAddBody,
   CastRemoveBody,
   ReactionBody,
-  FollowBody,
+  AmpBody,
   VerificationAddEthAddressBody,
   VerificationRemoveBody,
   SignerBody,
@@ -383,8 +383,8 @@ enum MessageType {
   CastRemove = 2,
   ReactionAdd = 3,
   ReactionRemove = 4,
-  FollowAdd = 5,
-  FollowRemove = 6,
+  AmpAdd = 5,
+  AmpRemove = 6,
   VerificationAddEthAddress = 7,
   VerificationRemove = 8,
   SignerAdd = 9,
@@ -438,7 +438,7 @@ graph TD
     SignerC -->  CastA[Cast]
     SignerC -->  |EdDSA Signature| CastB[Cast]
     SignerA1 -->  CastC[Cast]
-    SignerA1 -->  CastD[Follow]
+    SignerA1 -->  CastD[Amp]
 ```
 
 The Signer Store has a two-phase CRDT with an add-set and a remove-set for each custody address for an fid. It keeps track of custody addresses by subscribing to `Register` and `Transfer` events from the Farcaster ID Registry. When a new message `m` is merged into the store it is added to the add-set or remove-set depending on the type of message. If it is an add message, it must pass the following validations:
@@ -523,7 +523,7 @@ The Cast Store is a two-phase set CRDT which tracks and and remove cast messages
 3. `parent`, if present, must be a valid URI pointing
 4. `text` must contain <= 320 valid unicode characters
 
-The resource id $r$ for a cast-add message is the tuple `(fid, hash)` while the $r$ for a cast-remove message is `$(fid, targetHash)`. If a new message `m` is received that has an $r$ identical to that of another message `n`, it creates a conflict which is resolved with the following rules:
+The conflict id $c$ for a cast-add message is the tuple `(fid, hash)` while the $c$ for a cast-remove message is `$(fid, targetHash)`. If a new message `m` is received that has an $c$ identical to that of another message `n`, it creates a conflict which is resolved with the following rules:
 
 1. If one message is a remove and the other is an add, retain the remove and discard the add.
 2. If the messages are of the same time and the timestamps are distinct, retain the one with the highest timestamp.
@@ -551,27 +551,27 @@ ReactionType {
 
 The Reaction Store is a two-phase set CRDT with last write wins semantics that stores add and remove reaction messages. Each user may store a maximum of 5,000 messages and messages may have a maximum age of 3 months.
 
-The resource id $r$ for any type of reaction message is the triple `(fid, castId, type)` and only one reaction may exist per triple. If a new message `m` is received that has $r$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
+The conflict id $c$ for any type of reaction message is the triple `(fid, castId, type)` and only one reaction may exist per triple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
 
 1. If timestamps are distinct, retain the one with the highest timestamp.
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 7.5 Follows
+## 7.5 Amps
 
-A Follow is a link between two users which indicates that one user is subscribed to the updates of another. They can be added and removed at any time and represent an edge in the social graph. Add and remove messages for follows have identical bodies with different types.
+An Amp is a link between two users which indicates that one user is "boosting" the other. They can be added and removed at any time and represent an edge in the social graph. Add and remove messages for amps have identical bodies with different types.
 
 ```ts
-table FollowBody {
+table AmpBody {
   user: UserId (required);
 }
 ```
 
 #### Store
 
-The Follow Store is a two-phase set CRDT with last write wins semantics that stores add and remove follow messages in separate sets. The store also ensures that there is a maximum of 5,000 messages per fid.
+The Amp Store is a two-phase set CRDT with last write wins semantics that stores add and remove amp messages in separate sets. The store also ensures that there is a maximum of 100 messages per fid and messages may have a maximum age of 3 months.
 
-The resource id $r$ for any type of follow message is the tuple `(fid, userId)` and only one follow may exist per tuple. If a new message `m` is received that has $r$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the rules:
+The conflict id $c$ for any type of amp message is the tuple `(fid, userId)` and only one amp may exist per tuple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the rules:
 
 1. If timestamps are distinct, retain the one with the highest timestamp.
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
@@ -581,7 +581,7 @@ The resource id $r$ for any type of follow message is the tuple `(fid, userId)` 
 
 A verification is a bi-directional, cryptographic proof of ownership between a Farcaster account and an external account. They can be used to prove ownership of Ethereum addresses, specific NFTs, social media accounts, or domain names.
 
-A VerificationAdd message must contain an identifier for the external account and a signature from it. Each type of verification will have its own AddMessage since they may contain different types of identifiers and signatures. The resource id $r$ of the verification is the identifier for the external account. Verification are removed with a VerificationRemove messages that contains the resource identifier.
+A VerificationAdd message must contain an identifier for the external account and a signature from it. Each type of verification will have its own AddMessage since they may contain different types of identifiers and signatures. The conflict id $c$ of the verification is the identifier for the external account. Verification are removed with a VerificationRemove messages that contains the conflict identifier.
 
 ### 7.6.1 Verification Messages
 
@@ -601,7 +601,7 @@ table VerificationRemoveBody {
 
 The Verification Store is a two-phase set CRDT with last write wins semantics that stores add and remove verification messages in separate sets. Each user can store a maximum of 50 messages, after which the oldest messages by timestamp-hash order are expired.
 
-The resource id $r$ for any type of follow message is the tuple `(fid, address)` and only one verification may exist per tuple. If a new message `m` is received that has $r$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
+The conflict id $c$ for any type of verification message is the tuple `(fid, address)` and only one verification may exist per tuple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
 
 1. If timestamps are distinct, retain the one with the highest timestamp.
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
@@ -626,11 +626,9 @@ UserDataType {
 }
 ```
 
-TODO: define validation rules for each type
-
 ### 7.7.3 User Data Store
 
-The User Data Store is a grow-only set CRDT with last write wins semantics that stores user data messages in a set. The resource id $r$ for any user data message is the tuple `(fid, dataType)` and only one message may exist per type. If a new message `m` is received that has $r$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
+The User Data Store is a grow-only set CRDT with last write wins semantics that stores user data messages in a set. The conflict id $c$ for any user data message is the tuple `(fid, dataType)` and only one message may exist per type. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
 
 1. If timestamps are distinct, retain the one with the highest timestamp.
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
