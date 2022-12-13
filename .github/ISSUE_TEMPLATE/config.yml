@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+    - name: Propose a Feature
+      url: https://github.com/farcasterxyz/protocol/discussions
+      about: New changes can be proposed in discussions, this tracker is for approved changes
+
+    - name: Client Support
+      url: https://github.com/farcasterxyz/protocol/discussions
+      about: For support with desktop or mobile clients, reach out to the developers directly.
