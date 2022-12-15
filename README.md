@@ -41,7 +41,7 @@ Developments in other areas offer useful building blocks for decentralized socia
 
 ### 1.2 Proposal
 
-Farcaster is a decentralized social network built on top of Ethereum. The Layer 1 blockchain manages user identities, while a Layer 2 network propagates updates between users . It offers:
+Farcaster is a decentralized social network built on top of Ethereum. The Layer 1 blockchain manages user identities, while a Layer 2 network propagates updates between users. It offers:
 
 1. Secure, memorable, and human-readable user identifiers like `@alice`
 2. Real-time settlement and propagation of changes between users.
@@ -106,7 +106,7 @@ A Farcaster name or `fname` is an optional, human-readable identifier for users 
 
 Fnames must be unique and match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. While Ethereum has many namespaces, fnames have unique properties that make them very useful in social networks. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack), and are [recoverable](#33-recovery).
 
-User register fnames for a year at at ime by paying a fee to the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/), which issues each one as an NFT. The protocol's core team periodically sets the fee rate to a value that makes squatting less practical. An fname becomes renewable ninety days before it expires. Once expired, fnames enter a dutch auction where the price is set to a yearly fee plus a premium, which decays until it reaches zero.
+User register fnames for a year at a time by paying a fee to the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/), which issues each one as an NFT. The protocol's core team periodically sets the fee rate to a value that makes squatting less practical. An fname becomes renewable ninety days before it expires. Once expired, fnames enter a dutch auction where the price is set to a yearly fee plus a premium, which decays until it reaches zero.
 
 ## 2.3 Recovery
 
@@ -521,7 +521,7 @@ graph TB
 
 #### Store
 
-The Cast Store is a two-phase set CRDT which tracks and and remove cast messages. A cast add message must follow these rules:
+The Cast Store is a two-phase set CRDT which tracks add and remove cast messages. A cast add message must follow these rules:
 
 1. `embeds` must contain between 0 and 2 URIs, each of which can be up to 256 characters
 2. `mentions` must contain between 0 and 5 Farcaster IDs
