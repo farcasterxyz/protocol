@@ -369,7 +369,7 @@ There are six types of stores on Farcaster:
 5. `Verifications` - proofs of ownership of assets created by a user
 6. `UserData` - user metadata added by the user
 
-MessageType and MessageBody indicate the action being performed and the payload provided along with the action. For example, the action `ReactionRemove` may be selected with then requires the `ReactionBody` type which has information about the reaction being removed.
+MessageType and MessageBody indicate the action being performed and the payload provided along with the action. For example, the action `ReactionRemove` may be selected which then requires the `ReactionBody` type which has information about the reaction being removed.
 
 ```ts
 MessageBody {
