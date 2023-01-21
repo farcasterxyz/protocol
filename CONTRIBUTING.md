@@ -1,11 +1,16 @@
-# Farcaster Protocol Meetings
+# Contributing
 
-The Farcaster Protocol Meeting is a technical meeting to coordinate work between protocol developers. The meeting is run weekly on Thursdays from 10:00am - 10:45am PT.
+Thanks for your interest in improving Farcaster!
 
-## Agenda
+No contribution is too small and we welcome your help. There's always something to work on, no matter how
+experienced you are. You can help improve Farcaster by: 
 
-The meeting can be used to provide status updates on major projects or to discuss complicated technical proposals in real time. Anyone can propose a topic by commenting on the weekly agenda document [in Notion](https://farcasterxyz.notion.site/b08fed5cbf884e6a80b3acc2dd0666b2?v=4b51e7442af14b48a69871299c22e288). Prior meeting notes and action items are also tracked in Notion.
+1. Suggesting new extensions or ideas to the protocol
+2. Improving the quality of documentation in this repository
+3. Making improvements or fixes to our [Ethereum contracts](https://github.com/farcasterxyz/contracts)
+4. Making improvements or changes to our [Hub implementation](https://github.com/farcasterxyz/hub)
 
-## Attendees
 
-The meeting is open to anyone who is actively contributing to Farcaster applications or protocols. If you are interested in joining, please contact [Varun Srinivasan](https://t.me/varunsrin) who organizes the meetings.
+If the change is straightforward open a ticket or start a discussion in the appropriate repo. If you have questions, join the Developer Telegram where you can ask questions. 
+
+The development team meets every other Thursday  at 10am PT on Zoom to discuss major topics with the community. To join, please add this [calendar invite](https://calendar.google.com/calendar/u/0?cid=NjA5ZWM4Y2IwMmZiMWM2ZDYyMTkzNWM1YWNkZTRlNWExN2YxOWQ2NDU3NTA3MjQwMTk3YmJlZGFjYTQ3MjZlOEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t) to your calendar. The meeting contains the Zoom link and a link to the agenda for the week.

@@ -2,6 +2,12 @@
 
 ![Archway](/images/arch512.png)
 
+Farcaster is a protocol for building decentralized social applications. If you want: 
+
+1. a detailed overview of the protocol, keep reading.
+2. a quick video overview, check out the [video series](https://www.youtube.com/watch?v=vMWjol6xHJ0&list=PL0eq1PLf6eUdm35v_840EGLXkVJDhxhcF)
+3. to contribute to the protocol, see [the contributing guidelines](CONTRIBUTING.md)
+
 ## Table of Contents
 
 1. [Introduction](#1-introduction)
