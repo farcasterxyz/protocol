@@ -350,7 +350,7 @@ MessageData {
 
 #### Timestamps
 
-Messages must contain a `timestamp` which is an epoch timestamp in milliseconds. The start of the epoch is Jan 1st 2021, 0:00:00 GMT and all seconds are incremented from it. Timestamps cannot be set to future values since Hubs will reject messages that are ahead of their system clock.
+Messages must contain a `timestamp` which is an epoch timestamp in seconds. The start of the epoch is Jan 1st 2021, 0:00:00 GMT and all seconds are incremented from it. Timestamps cannot be set to future values since Hubs will reject messages that are ahead of their system clock.
 
 #### Network
 
