@@ -23,13 +23,16 @@ Farcaster is a protocol for building decentralized social applications. If you w
    3. [Authentication](#33-authentication)
    4. [Bounding Graph Size](#34-bounding-graph-size)
 4. [Hubs](#4-hubs)
-   1. [Gossip](#41-gossip)
-   2. [Differential sync](#42-differential-sync)
-   3. [Byzantine Tolerance](#43-byzantine-tolerance)
+   1. [Synchronization](#41-synchronization)
 5. [Applications](#5-applications)
 6. [Upgradeability](#6-upgradeability)
    1. [Release Schedule](#61-release-schedule)
 7. [Acknowledgements](#7-acknowledgements)
+8. [Appendix A: Proposals](#8-appendix-a-proposals)
+9. [Appendix B: Delta Specifications](#9-appendix-b-delta-specifications)
+10. [Appendix C: Application Specifications](#10-appendix-c-application-specifications)
+11. [Appendix D: Contract Specifications](#11-appendix-d-contract-specifications)
+
 
 ## 1. Introduction
 
@@ -210,25 +213,131 @@ Users are only permitted to store certain deltas for a fixed time. Expiring very
 
 # 4. Hubs
 
-A Hub is a replica or node in the Farcaster network that synchronizes the delta graph. It is conceptually like a blockchain node but with a different consensus mechanism. Hubs receive deltas from clients over APIs and transmit them to other hubs over a peer-to-peer protocol. They listen to updates from the Ethereum blockchain and update the identity state of the delta graph as needed. Hubs conform to standards that allow different implementations to be interoperable.
+A Hub is a node in the Farcaster network that synchronizes the delta graph. It's similar to a blockchain node but with a different consensus mechanism. Hubs get deltas from clients broadcast them to other hubs over a peer-to-peer protocol. They listen to updates from the Ethereum blockchain and update the identity state of the delta graph as needed. Hubs conform to standards that allow different implementations to be interoperable.
 
-## 4.1 Gossip
+## 4.1 Synchronization
 
-Hubs communicate with their peers over a gossip protocol implemented with libp2p. Each Hub is bootstrapped with a list of peers, which it can use to discover more peers. When a hub finds a new delta, it broadcasts it to its peers, which repeat the same process propagating the update across the network.
+Hubs communicate with each other using a [gossipsub protocol](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md) implemented with [libp2p](https://libp2p.io/). The libp2p library is also used to discover peers, authenticate nodes and handle network failures and attacks. Deltas received by a hub are broadcast to its peers as gossip messages, and an out-of-band sync process is added to handle special cases. 
 
-Gossip alone does not guarantee strong eventual consistency since deltas can go missing or arrive in the wrong order. Missing deltas happen because the UDP protocol is lossy and does not guarantee delivery or ordering. Ordering is vital for convergence because Signer CRDTs must be synchronized before other CRDTs.
+A hub joins the network by connecting to a bootstrap hub which introduces it to other peers. It then performs an out-of-band diff sync to download all known deltas from a chosen peer. The gossipsub network has a simple [floodsub](https://github.com/libp2p/js-libp2p-floodsub)-like configuration with a single mesh and two topics: contact information and deltas.  The hub then begins listen to and republishing delta messages to the delta topic, and  periodically sends out its latest IP address to the contact information topic. 
 
-## 4.2 Differential Sync
+Gossiping updates does not guarantee strong eventual consistency since deltas may be lost or arrive out of order. Ordering affects consistency since non-signer deltas depend on associated signer deltas being merged before them. To address this, Hubs periodically select a random peer and perform a full diff sync to ensure that they catch any lost messages.
 
-Hubs employ an out-of-band protocol to deal with gossip's lossiness. Each Hub maintains a merkle-patricia trie of delta identifiers that it knows about, and gossip messages include the root of this trie. A hub that receives a gossip message adds the delta's identifier into its trie. The Hubs are out of sync if the local trie root does not match the one included in the gossip messages.
+### 4.1.2 Sync Trie
 
-An out-of-band sync process occurs where the recipient hub compares its merkle trie with the senders. If the sender has new messages unknown to the recipient, the latter fetches them using the former's gRPC APIs. If the recipient is the one with new messages, the sync process terminates.
+Hubs use a [Merkle Patricia Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/) to track and sync known deltas. A unique sync id is calculated for each delta and inserted into the trie. The sync id is 36 bytes long with the first 10 bytes reserved for the deltas timestamp and the remaining bytes reserved for the delta storage key. The storage key uniquely identifies deltas with the same timestamp and allows lookups of the delta from storage. Using timestamp-prefixed ids makes the sync trie chronologically-ordered with the right most branch containing the sync id of the newest message. A simplified 4-byte version of the trie with 2-byte timestamps and keys is shown below. 
 
-The sender will eventually sync back with the recipient when it receives a gossip message or after a time if no gossip message was observed. The sync process must ensure that the blockchain state is as up-to-date as possible since Signer CRDTs depend on it. Due to the signer dependencies, it must also sync Signer CRDTs before syncing any other CRDT types.
+```mermaid
+graph TD
+    HubB( ):::clear --> NodeA( ) & NodeB( ) 
 
-Hubs whose clocks are out of sync may have CRDTs in different states due to the time-based delta pruning. Such hubs may never converge if the network is noisy enough and the skew between clocks is large enough. CRDTs must round timestamps down to the nearest 10th second before expiring them to mitigate this problem.
+    NodeA:::ts --> NodeA1( ):::ts
+    NodeA1 --> NodeA1-1( ):::key
+    NodeA1 --> NodeA1-2( ):::key
 
-## 4.3 Byzantine Tolerance
+    NodeA1-1 --> NodeA1-1-1( ):::key
+    NodeA1-1 --> NodeA1-1-2( ):::key
+    NodeA1-1 --> NodeA1-1-3( ):::key
+
+    NodeA1-2 --> NodeA1-2-1( ):::key
+    NodeA1-2 --> NodeA1-2-2( ):::key
+    NodeA1-2 --> NodeA1-2-3( ):::key
+
+    NodeA:::ts --> NodeA2( ):::ts
+    NodeA2 --> NodeA2-1( ):::key
+
+    NodeA2-1 --> NodeA2-1-1( ):::key
+    NodeA2-1 --> NodeA2-1-2( ):::key
+    NodeA2-1 --> NodeA2-1-3( ):::key
+
+    NodeB:::ts --> NodeB1( ):::ts
+    NodeB1 --> NodeB1-1( ):::key
+    NodeB1 --> NodeB1-2( ):::key
+
+    NodeB1-1 --> NodeB1-1-1( ):::key
+    NodeB1-1 --> NodeB1-1-2( ):::key
+    NodeB1-1 --> NodeB1-1-3( ):::key
+
+    NodeB1-2 --> NodeB1-2-1( ):::key
+    NodeB1-2 --> NodeB1-2-2( ):::key
+    NodeB1-2 --> NodeB1-2-3( ):::key
+
+    classDef ts fill:#8ecae6;
+    classDef key fill:#FEC842;
+    classDef clear fill:#ffffff;
+```
+
+### 4.1.2 Diff Sync
+
+Two sync tries can be diffed quickly by comparing _exclusion sets_, which takes advantage of the fact that tries are chronologically ordered with new messages being mostly added on the right-hand side. An exclusion node (green) is one that shares a parent with a node in the latest branch (red). Exclusion nodes at each level are combined and hashed to produce a unique exclusion value for each level of the trie. The set of exclusion values for all levels in the trie is the exclusion set, which is the array `[hash(2021), hash(oct, nov, dec), hash (1, 2)]` in the human-readable example trie below. 
+
+<br/>
+
+```mermaid
+graph TD
+    HubB(root):::clear --> NodeE(2021) & NodeF(2022)
+
+    NodeE:::excl --> NodeE4(Oct):::excl
+    NodeE4 --> NodeE4-1(1):::clear
+    NodeE4 --> NodeE4-2(2):::clear
+    NodeE4 --> NodeE4-3(..):::clear
+
+    NodeE:::excl --> NodeE2(nov):::excl
+    NodeE2 --> NodeE2-1(1):::clear
+    NodeE2 --> NodeE2-2(2):::clear
+    NodeE2 --> NodeE2-3(..):::clear
+
+    NodeE --> NodeE3(dec):::excl
+    NodeE3 --> NodeE3-1(1):::clear
+    NodeE3 --> NodeE3-2(2):::clear
+    NodeE3 --> NodeE3-3(..):::clear
+
+
+    NodeF:::edge --> NodeF3(jan):::edge
+    NodeF3 --> NodeF3-1(1):::excl
+    NodeF3 --> NodeF3-2(2):::excl
+    NodeF3 --> NodeF3-3(3):::edge
+
+    classDef edge fill:#FE845F;
+    classDef excl fill:#80D096;
+    classDef clear fill:#ffffff;
+```
+
+<br/>
+
+The point at which two tries diverge is determined in constant time by comparing exclusion sets from left to right. In the example below, the first level `hash(2022)` and the second level `hash(feb)` are identical, but the third level is not: `hash(10)` vs `hash(10, 11)`. The parent node `mar` is the divergence point of the two tries. Diff sync then moves to the second phrase where hubs request the full trie under the divergent node. These tries are then compared with a more traditional diffing algorithm that works in logarithmic time. Finally the missing branches are converted into sync ids, requested from the other hub and merged into the hub's state to bring it in sync. 
+
+<br/>
+
+
+```mermaid
+graph TD
+    HubA(root a):::clear --> NodeA(2022):::excl & NodeB(2023)
+    NodeB:::edge --> NodeB2(feb):::excl
+    NodeB2 --> NodeB2-1(1):::clear
+    NodeB2 -->  NodeB2-2(2):::clear
+    NodeB --> NodeB3(mar):::edge
+    NodeB3 --> NodeB3-1(10):::excl
+    NodeB3 --> NodeB3-2(11):::edge
+
+    HubB(root b):::clear --> NodeD(2022):::excl & NodeE(2023)
+    NodeE:::edge --> NodeE2(feb):::excl
+    NodeE2 --> NodeE2-1(1):::clear
+    NodeE2 --> NodeE2-2(2):::clear
+    NodeE --> NodeE3(mar):::edge
+    NodeE3 --> NodeE3-1(10):::excl
+    NodeE3 --> NodeE3-2(11):::excl
+    NodeE3 --> NodeE3-3(12):::edge
+
+    classDef edge fill:#FE845F;
+    classDef excl fill:#80D096;
+    classDef clear fill:#ffffff;
+```
+
+<br/>
+
+
+### 4.1.4 Byzantine Tolerance
 
 Peer may be malfunctioning or malicious, and sync must succeed even under such adversarial conditions. One peer can DDOS another, inhibiting its ability to stay in sync. Peers can also drop certain messages, which causes synchronization thrash. If coordinated at a large scale, it can even result in an eclipse attack where a user's messages appear to be missing from the network.
 
@@ -304,13 +413,39 @@ gantt
 
 The Farcaster protocol would not have been possible without significant contributions from [Dan Romero](https://github.com/danromero), [Shane da Silva](https://github.com/sds), [Sean Yu](https://github.com/seansu4you87), [Gavi Galloway](https://github.com/gsgalloway), [Paul Fletcher-Hill](https://github.com/pfletcherhill), [Sanjay Prabhu](https://github.com/sanjayprabhu), Sagar Dhawan, [Cassandra Heart](https://github.com/CassOnMars) and [Aditya Kulkarni](https://github.com/adityapk00).
 
-# 8. Appendix A: Delta Specifications
+# 8 Appendix A: Proposals
 
-## 8.1 Signed Messages
+Many design choices have nuances and tradeoffs that are difficult to express tersely in the protocol docs. Long form proposal documents are usually produced to discuss these decisions which cover such details. This section includes links to such proposals whose design decisions are relevant to the current protocol.
+
+#### January 2023
+
+- [Making Casts More Flexible](https://hackmd.io/@farcasterxyz/SypxvxUjs)
+- [Handling Storage, Bandwidth and Eclipse Attacks](https://hackmd.io/@farcasterxyz/HkPnA_iss)
+
+#### December 2022
+
+- [Decentralizing the Social Graph](https://hackmd.io/IP-8snyMQfOGxV3LUjlJbA)
+- [Smart Contract Wallets for Farcaster](https://hackmd.io/1OpipDgCRaOdXKXQYjVuzQ)
+
+#### November 2022
+
+- [Collision Attacks on Message Identifiers](https://hackmd.io/z_WWPg_4RQO8irbZepjQUA)
+- [Handling Custody Transfers Safely](https://hackmd.io/NdBdxUaCTWCbNZ7yUWStnA)
+
+#### October 2022
+
+- [Decentralization of Hubs](https://hackmd.io/@farcasterxyz/ry0QL4M4o)
+- [Pruned Sets](https://hackmd.io/fCa8_RCEQ4qBYZjfnas9Zg)
+- [Farcaster Message Identifiers](https://hackmd.io/J82kyDFvT56umneqvX4IPA)
+
+
+# 9. Appendix B: Delta Specifications
+
+## 9.1 Signed Messages
 
 A Signed Message is a tamper-proof and self-authenticating data format that can represent a delta operation. A message is serialized as a binary [flatbuffer](https://github.com/google/flatbuffers) and is the interchange format for transmitting deltas over the Farcaster network. The specification uses an abbreviated flatbuffer-like schema to describe the data structure.
 
-### 8.1.1 Message Object
+### 9.1.1 Message Object
 
 The `Message` object contains the payload of the message in a single data object and also includes a hash, which is used as a unique identifier, and a signature, which is used to ensure that the message hasn't been tampered with and to establish the author of the delta.
 
@@ -334,7 +469,7 @@ The bytes are then passed through a signature function specified by the signatur
 - `ECDSA Scheme` - a 256-bit signature from an Ethereum address, where the signer is the address
 - `EdDSA Scheme` - a 256-bit signature from an EdDSA key pair, where the signer is the public key
 
-### 8.1.2 Message Data
+### 9.1.2 Message Data
 
 A `MessageData` object contains generic properties like the fid, network and timestamp which are common to all deltas. The type of delta is indicated by the type property and the `MessageBody` contains properties specific to the type.
 
@@ -364,7 +499,7 @@ FarcasterNetwork {
 }
 ```
 
-### 8.1.3 Message Types
+### 9.1.3 Message Types
 
 There are six types of stores on Farcaster:
 
@@ -404,7 +539,7 @@ enum MessageType {
 }
 ```
 
-### 8.1.4 Storage
+### 9.1.4 Storage
 
 Messages must be stored using an anonymous Δ-state CRDT and each delta type has its own CRDT. The rules of the CRDT ensure that a deltas can be added in a manner that is commutative, associative and idempotent while never moving causally backward. Formally, the CRDT has a state `S` and a merge function `merge(m, S)` which returns a new state `S' >= S`.
 
@@ -420,7 +555,7 @@ While each CRDT has its own validations, all CRDTs must implement the following 
 
 A lexicographical ordering of messages can be determined by comparing the values of their hashes. Assume two messages $m$ and $n$ with hashes $x$ and $y$ of length $n$ represented as strings. If the ASCII values of all character pairs $(x_1, y_1), (x_2, y_2)$ are equal, the hashes are considered equal. Otherwise, compare the first distinct pair $(x_n, y_n)$ choosing $x$ as the winner if $x_n > y_n$ or $y$ otherwises.
 
-## 8.2 Signers
+## 9.2 Signers
 
 A _Signer_ is a an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs.
 
@@ -466,7 +601,7 @@ A conflict occurs if there exists another message `n` with the same values for `
 
 The store ensures that there is a maximum of 100 signer messages per fid.
 
-## 8.3 Casts
+## 9.3 Casts
 
 A Cast is a public message created by a user which contains some text and is displayed on their account. Casts may also contain URI's pointing to media, on-chain activity or even other casts. Casts can also be removed by the user who created them at any time.
 
@@ -542,7 +677,7 @@ The conflict id $c$ for a cast-add message is the tuple `(fid, hash)` while the 
 
 The store ensures that there is a maximum of 10,000 cast messages per fid and any casts older than 1 year are expired from the set.
 
-## 8.4 Reactions
+## 9.4 Reactions
 
 A Reaction is a type of link between a user and a target which can be a cast, url or on-chain activity. The two types of reactions are likes and recasts, and the protocol can be extended to support new types. Reactions can be added and removed at any time and represent an edge in the social graph. Add and remove messages for reactions have identical bodies with different types.
 
@@ -568,7 +703,7 @@ The conflict id $c$ for any type of reaction message is the triple `(fid, castId
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 8.5 Amps
+## 9.5 Amps
 
 An Amp is a link between two users which indicates that one user is "boosting" the other. They can be added and removed at any time and represent an edge in the social graph. Add and remove messages for amps have identical bodies with different types.
 
@@ -588,13 +723,13 @@ The conflict id $c$ for any type of amp message is the tuple `(fid, userId)` and
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 8.6 Verifications
+## 9.6 Verifications
 
 A verification is a bi-directional, cryptographic proof of ownership between a Farcaster account and an external account. They can be used to prove ownership of Ethereum addresses, specific NFTs, social media accounts, or domain names.
 
 A VerificationAdd message must contain an identifier for the external account and a signature from it. Each type of verification will have its own AddMessage since they may contain different types of identifiers and signatures. The conflict id $c$ of the verification is the identifier for the external account. Verification are removed with a VerificationRemove messages that contains the conflict identifier.
 
-### 8.6.1 Verification Messages
+### 9.6.1 Verification Messages
 
 ```ts
 VerificationAddEthAddressBody {
@@ -618,7 +753,7 @@ The conflict id $c$ for any type of verification message is the tuple `(fid, add
 2. If one message is a remove and the other is an add, retain the remove and discard the add.
 3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
 
-## 8.7 User Data
+## 9.7 User Data
 
 User Data stores metadata about a user like their profile picture or display name. A fixed number of user data entries are permitted by the protocol and there is no remove operation, though values can be reset to null.
 
@@ -637,7 +772,7 @@ UserDataType {
 }
 ```
 
-### 8.7.3 User Data Store
+### 9.7.3 User Data Store
 
 The User Data Store is a grow-only set CRDT with last write wins semantics that stores user data messages in a set. The conflict id $c$ for any user data message is the tuple `(fid, dataType)` and only one message may exist per type. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
 
@@ -647,27 +782,7 @@ The User Data Store is a grow-only set CRDT with last write wins semantics that 
 
 The store also ensures that there is a maximum of 100 messages per fid.
 
-# Appendix B: Proposals
-
-Many design choices have nuances and tradeoffs that are difficult to express tersely in the protocol docs. Long form proposal documents are usually produced to discuss these decisions which cover such details. This section includes links to such proposals whose design decisions are relevant to the current protocol.
-
-#### October 2022
-
-- [Decentralization of Hubs](https://hackmd.io/@farcasterxyz/ry0QL4M4o)
-- [Pruned Sets](https://hackmd.io/fCa8_RCEQ4qBYZjfnas9Zg)
-- [Farcaster Message Identifiers](https://hackmd.io/J82kyDFvT56umneqvX4IPA)
-
-#### November 2022
-
-- [Collision Attacks on Message Identifiers](https://hackmd.io/z_WWPg_4RQO8irbZepjQUA)
-- [Handling Custody Transfers Safely](https://hackmd.io/NdBdxUaCTWCbNZ7yUWStnA)
-
-#### December 2022
-
-- [Decentralizing the Social Graph](https://hackmd.io/IP-8snyMQfOGxV3LUjlJbA)
-- [Smart Contract Wallets for Farcaster](https://hackmd.io/1OpipDgCRaOdXKXQYjVuzQ)
-
-# Appendix C: Application Specifications
+# 10. Appendix C: Application Specifications
 
 #### Rendering Casts
 
@@ -679,7 +794,7 @@ Client should follow these rules when rendering casts:
 
 Clients may also send notifications to their users or render them as hyperlinks in their UI
 
-# Appendix D: Contract Specifications
+# 11. Appendix D: Contract Specifications
 
 #### Username Policy
 
