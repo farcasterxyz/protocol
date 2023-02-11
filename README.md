@@ -660,10 +660,10 @@ graph TB
 
 The Cast Store is a two-phase set CRDT which tracks add and remove cast messages. A cast add message must follow these rules:
 
-1. `embeds` must contain between 0 and 2 URIs, each of which can be up to 256 characters
+1. `embeds` must contain between 0 and 2 URIs, each of which can be up to 256 bytes
 2. `mentions` must contain between 0 and 5 Farcaster IDs
 3. `parent`, if present, must be a valid URI pointing
-4. `text` must contain <= 320 valid unicode characters
+4. `text` must contain <= 320 valid unicode character bytes
 
 The conflict id $c$ for a cast-add message is the tuple `(fid, hash)` while the $c$ for a cast-remove message is `$(fid, targetHash)`. If a new message `m` is received that has an $c$ identical to that of another message `n`, it creates a conflict which is resolved with the following rules:
 
