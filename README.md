@@ -6,7 +6,8 @@ Farcaster is a protocol for building decentralized social applications. If you w
 
 1. a detailed overview of the protocol, keep reading.
 2. a quick video overview, check out the [video series](https://www.youtube.com/watch?v=vMWjol6xHJ0&list=PL0eq1PLf6eUdm35v_840EGLXkVJDhxhcF)
-3. to contribute to the protocol, see [the contributing guidelines](CONTRIBUTING.md)
+3. to contribute to the protocol, see the [contributing guidelines](CONTRIBUTING.md)
+4. the latest updates, join the [farcaster telegram channel](https://t.me/farcasterxyz)
 
 ## Table of Contents
 
