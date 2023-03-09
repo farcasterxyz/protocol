@@ -591,11 +591,11 @@ A lexicographical ordering of messages can be determined by comparing the values
 
 ## 9.2 Signers
 
-A _Signer_ is an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs. Each signer also contains an optional `name` field which is a human-readable name for the key pair. 
+A _Signer_ is an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs. Each signer also contains an optional `name` field which is a human-readable name for the key pair.
 
 ```ts
 type SignerAddBody = {
-  name: string     // max 32 byte name of the signer
+  name: string; // max 32 byte name of the signer
   pubKey: string; // public key of the EdDSA key pair
 };
 
