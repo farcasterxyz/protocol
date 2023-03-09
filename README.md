@@ -11,28 +11,64 @@ Farcaster is a protocol for building decentralized social applications. If you w
 
 ## Table of Contents
 
-1. [Introduction](#1-introduction)
-   1. [Prior Art](#11-prior-art)
-   2. [Proposal](#12-proposal)
-2. [Identity](#2-identity)
-   1. [Farcaster ID's](#21-farcaster-ids)
-   2. [Farcaster Names ](#22-farcaster-names)
-   3. [Recovery](#23-recovery)
-3. [Delta Graph](#3-delta-graph)
-   1. [Synchronization](#31-synchronization)
-   2. [Ordering](#32-ordering)
-   3. [Authentication](#33-authentication)
-   4. [Bounding Graph Size](#34-bounding-graph-size)
-4. [Hubs](#4-hubs)
-   1. [Synchronization](#41-synchronization)
-5. [Applications](#5-applications)
-6. [Upgradeability](#6-upgradeability)
-   1. [Release Schedule](#61-release-schedule)
-7. [Acknowledgements](#7-acknowledgements)
-8. [Appendix A: Proposals](#8-appendix-a-proposals)
-9. [Appendix B: Delta Specifications](#9-appendix-b-delta-specifications)
-10. [Appendix C: Application Specifications](#10-appendix-c-application-specifications)
-11. [Appendix D: Contract Specifications](#11-appendix-d-contract-specifications)
+- [Farcaster Protocol](#farcaster-protocol)
+  - [Table of Contents](#table-of-contents)
+  - [1. Introduction](#1-introduction)
+    - [1.1 Prior Art](#11-prior-art)
+    - [1.2 Proposal](#12-proposal)
+- [2. Identity](#2-identity)
+  - [2.1 Farcaster ID's](#21-farcaster-ids)
+  - [2.2 Farcaster Names](#22-farcaster-names)
+  - [2.3 Recovery](#23-recovery)
+- [3. Delta-Graph](#3-delta-graph)
+  - [3.1 Synchronization](#31-synchronization)
+  - [3.2 Ordering](#32-ordering)
+  - [3.3 Authentication](#33-authentication)
+  - [3.4 Bounding Graph Size](#34-bounding-graph-size)
+- [4. Hubs](#4-hubs)
+  - [4.1 Synchronization](#41-synchronization)
+    - [4.1.2 Sync Trie](#412-sync-trie)
+    - [4.1.2 Diff Sync](#412-diff-sync)
+    - [4.1.4 Byzantine Tolerance](#414-byzantine-tolerance)
+- [5. Applications](#5-applications)
+- [6. Upgradeability](#6-upgradeability)
+  - [6.1 Release Schedule](#61-release-schedule)
+      - [Protocol Releases](#protocol-releases)
+      - [Contract Releases](#contract-releases)
+      - [Hub Releases](#hub-releases)
+- [7. Acknowledgements](#7-acknowledgements)
+- [8 Appendix A: Proposals](#8-appendix-a-proposals)
+      - [January 2023](#january-2023)
+      - [December 2022](#december-2022)
+      - [November 2022](#november-2022)
+      - [October 2022](#october-2022)
+- [9. Appendix B: Delta Specifications](#9-appendix-b-delta-specifications)
+  - [9.1 Signed Messages](#91-signed-messages)
+    - [9.1.1 Message Object](#911-message-object)
+    - [9.1.2 Message Data](#912-message-data)
+      - [Timestamps](#timestamps)
+      - [Network](#network)
+    - [9.1.3 Message Types](#913-message-types)
+    - [9.1.4 Storage](#914-storage)
+      - [Ordering](#ordering)
+  - [9.2 Signers](#92-signers)
+  - [9.3 Casts](#93-casts)
+      - [Mentions](#mentions)
+      - [Replies](#replies)
+      - [Store](#store)
+  - [9.4 Reactions](#94-reactions)
+      - [Store](#store-1)
+  - [9.5 Amps](#95-amps)
+      - [Store](#store-2)
+  - [9.6 Verifications](#96-verifications)
+    - [9.6.1 Verification Messages](#961-verification-messages)
+      - [Store](#store-3)
+  - [9.7 User Data](#97-user-data)
+    - [9.7.3 User Data Store](#973-user-data-store)
+- [10. Appendix C: Application Specifications](#10-appendix-c-application-specifications)
+      - [Rendering Casts](#rendering-casts)
+- [11. Appendix D: Contract Specifications](#11-appendix-d-contract-specifications)
+      - [Username Policy](#username-policy)
 
 ## 1. Introduction
 
@@ -111,11 +147,11 @@ Users can sign a message containing their fid with the ECDSA key pair of their c
 
 ## 2.2 Farcaster Names
 
-A Farcaster name or `fname` is an optional, human-readable identifier for users and organizations. Fnames are alpha-numeric like @alice, distinguished from other text by prefixing it with an at-symbol. Users can get register an fname to a custody address, which can own more than one name at a time.
+A Farcaster name or `fname` is an optional, human-readable identifier for users and organizations. Fnames are alpha-numeric like @alice, distinguished from other text by prefixing it with an at-symbol. Users can register an fname to a custody address, which can own more than one name at a time.
 
 Fnames must be unique and match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. While Ethereum has many namespaces, fnames have unique properties that make them very useful in social networks. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack), and are [recoverable](#33-recovery).
 
-User register fnames for a year at a time by paying a fee to the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/), which issues each one as an NFT. The protocol's core team periodically sets the fee rate to a value that makes squatting less practical. An fname becomes renewable ninety days before it expires. Once expired, fnames enter a dutch auction where the price is set to a yearly fee plus a premium, which decays until it reaches zero.
+Users register fnames for a year at a time by paying a fee to the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/), which issues each one as an NFT. The protocol's core team periodically sets the fee rate to a value that makes squatting less practical. An fname becomes renewable ninety days before it expires. Once expired, fnames enter a dutch auction where the price is set to a yearly fee plus a premium, which decays until it reaches zero.
 
 ## 2.3 Recovery
 
@@ -517,7 +553,8 @@ MessageBody {
   AmpBody,
   VerificationAddEthAddressBody,
   VerificationRemoveBody,
-  SignerBody,
+  SignerAddBody,
+  SignerRemoveBody,
   UserDataBody
 }
 
@@ -554,10 +591,11 @@ A lexicographical ordering of messages can be determined by comparing the values
 
 ## 9.2 Signers
 
-A _Signer_ is a an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs.
+A _Signer_ is an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs. Each signer also contains an optional `name` field which is a human-readable name for the key pair. 
 
 ```ts
 type SignerAddBody = {
+  name: string     // max 32 byte name of the signer
   pubKey: string; // public key of the EdDSA key pair
 };
 
@@ -566,7 +604,7 @@ type SignerRemoveBody = {
 };
 ```
 
-Signers also become inactive if their custody address become inactive, which happens when the user transfer their fid to another Ethereum address. Inactive signers are still considered valid for a period of 60 minutes after their custody address becomes inactive after which they are evicted. The grace period allows users to transfer their custody address and preserve their history by re-authorizing the same signers from the new address.
+Signers also become inactive if their custody address become inactive, which happens when the user transfers their fid to another Ethereum address. Inactive signers are still considered valid for a period of 60 minutes after their custody address becomes inactive after which they are evicted. The grace period allows users to transfer their custody address and preserve their history by re-authorizing the same signers from the new address.
 
 ```mermaid
 graph TD
