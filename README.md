@@ -115,7 +115,7 @@ A Farcaster name or `fname` is an optional, human-readable identifier for users 
 
 Fnames must be unique and match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`. While Ethereum has many namespaces, fnames have unique properties that make them very useful in social networks. They are cheaper to mint and own, are less vulnerable to [homoglyph attacks](https://en.wikipedia.org/wiki/IDN_homograph_attack), and are [recoverable](#23-recovery).
 
-User register fnames for a year at a time by paying a fee to the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/), which issues each one as an NFT. The protocol's core team periodically sets the fee rate to a value that makes squatting less practical. An fname becomes renewable ninety days before it expires. Once expired, fnames enter a dutch auction where the price is set to a yearly fee plus a premium, which decays until it reaches zero.
+Users register fnames for a year at a time by paying a fee to the [Farcaster Name Registry](https://github.com/farcasterxyz/contracts/), which issues each one as an NFT. The protocol's core team periodically sets the fee rate to a value that makes squatting less practical. An fname becomes renewable ninety days before it expires. Once expired, fnames enter a dutch auction where the price is set to a yearly fee plus a premium, which decays until it reaches zero.
 
 ## 2.3 Recovery
 
@@ -517,7 +517,8 @@ MessageBody {
   AmpBody,
   VerificationAddEthAddressBody,
   VerificationRemoveBody,
-  SignerBody,
+  SignerAddBody,
+  SignerRemoveBody,
   UserDataBody
 }
 
@@ -554,10 +555,11 @@ A lexicographical ordering of messages can be determined by comparing the values
 
 ## 9.2 Signers
 
-A _Signer_ is a an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs.
+A _Signer_ is an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs. Each signer also contains an optional `name` field which is a human-readable name for the key pair.
 
 ```ts
 type SignerAddBody = {
+  name: string; // max 32 byte name of the signer
   pubKey: string; // public key of the EdDSA key pair
 };
 
@@ -566,7 +568,7 @@ type SignerRemoveBody = {
 };
 ```
 
-Signers also become inactive if their custody address become inactive, which happens when the user transfer their fid to another Ethereum address. Inactive signers are still considered valid for a period of 60 minutes after their custody address becomes inactive after which they are evicted. The grace period allows users to transfer their custody address and preserve their history by re-authorizing the same signers from the new address.
+Signers also become inactive if their custody address become inactive, which happens when the user transfers their fid to another Ethereum address. Inactive signers are still considered valid for a period of 60 minutes after their custody address becomes inactive after which they are evicted. The grace period allows users to transfer their custody address and preserve their history by re-authorizing the same signers from the new address.
 
 ```mermaid
 graph TD
