@@ -15,7 +15,7 @@ Version: `2023.3.1`
 
 A Message is a cryptographically signed binary data object that represents a delta-operation on the Farcaster network.
 
-Messages are specified and serialized into binary form using [proto3 protobufs](https://protobuf.dev/). Specifically, serialization of messages must be performed using [ts-proto@v1.146.0](https://github.com/stephenh/ts-proto) since serialization into bytes is not consistent across all implementations. A `Message` object contains the data payload and information required to verify the authenticity of the message.
+Messages are specified and serialized into binary form using [proto3 protobufs](https://protobuf.dev/). Specifically, serialization of messages must be performed using [ts-proto@v1.146.0](https://github.com/stephenh/ts-proto) since serialization into bytes is not consistent across all implementations. A `Message` object contains the data payload and information required to verify the message's authenticity.
 
 ```protobuf
 message Message {
@@ -35,11 +35,11 @@ A Message `m` is considered valid only if:
 3. `hash_scheme` is a currently valid hashing scheme
 4. `signature` is the signed output of `hash` using the `signature_scheme` and the `signer`
 5. `signature_scheme` is a valid scheme permitted by the MessageType
-6. `signer` is a valid public key or ethereum address used to produce the signature
+6. `signer` is a valid public key or Ethereum address used to produce the signature
 
 ### Hashing
 
-Messages are hashed by serializing the `data` protobuf into bytes using ts-proto and passing the bytes through a hashing function to obtain a digest. The valid hashing schemes are:
+Messages must be hashed by serializing the `data` protobuf into bytes using ts-proto and passing the bytes through a hashing function to obtain a digest. The valid hashing schemes are:
 
 - `BLAKE3`: A 160-bit [Blake3](https://github.com/BLAKE3-team/BLAKE3-specs) hash digest.
 
@@ -52,7 +52,7 @@ enum HashScheme {
 
 ### Signing
 
-Messages are signed by taking the `hash` and signing it using one of the valid signing schemes. The type of signature scheme that can be used is determined by the `MessageType`. The valid schemes are:
+Messages must be signed by taking the `hash` and signing it using one of the valid signing schemes. The type of signature scheme that can be used is determined by the `MessageType`. The valid schemes are:
 
 - `ED25519`: A 512-bit [EdDSA signature](https://www.rfc-editor.org/rfc/rfc8032) for the edwards 25519 curve.
 - `EIP712`: A 512-bit [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed data with a Farcaster domain separator.
@@ -81,7 +81,7 @@ Messages are totally ordered with a lexicographical scheme. Assume two messages 
 
 ## 1.1 Message Data
 
-A MessageData contains the payload of the Message which is hashed and signed to produce the message.
+A MessageData contains the payload of the Message, which is hashed and signed to produce the message.
 
 A `MessageData` object contains generic properties like the `fid`, `network` `timestamp` and `type` along with a `body`, which varies based on the `type`.
 
@@ -150,9 +150,9 @@ enum FarcasterNetwork {
 
 ## 1.2 Signers
 
-A _Signer_ is an Ed25519[^ed25519] key-pair that applications can use to authorize messages.
+A _Signer_ is an Ed25519[^ed25519] key pair that applications can use to authorize messages.
 
-A user authorizes an application's Signer with a signature from their custody address which currently holds their fid. The application can use the Signer to authorize Casts, Reactions and Verifications for that user. Users can revoke a Signer at any time with a signature from their custody address.
+A user authorizes an application's Signer with a signature from their custody address currently holding their fid. The application can use the Signer to authorize Casts, Reactions and Verifications for that user. Users can revoke a Signer at any time with a signature from their custody address.
 
 ```mermaid
 graph TD
@@ -180,9 +180,9 @@ message SignerRemoveBody {
 A SignerAdd or SignerRemove message `m` is only valid if it passes these validations:
 
 1. `m.data.body.signer` must by exactly 32 bytes.
-2. `m.signature_scheme` must be an `SIGNATURE_SCHEME_EIP712`.
+2. `m.signature_scheme` must be `SIGNATURE_SCHEME_EIP712`.
 3. `m.data.type` must be `MESSAGE_TYPE_USER_DATA_ADD`.
-4. `m.signer` must be an Ethereum address that currently owns the fid `m.data.fid`.
+4. `m.signer` must be an Ethereum address currently owning the fid `m.data.fid`.
 
 A SignerAdd message `m` must additionally pass these validations:
 
@@ -192,7 +192,7 @@ A SignerAdd message `m` must additionally pass these validations:
 
 A UserData message contains metadata about a user like their display name or profile picture.
 
-A UserData message can be added with a `UserDataAdd` message. It cannot be removed but it can be set to a null value.
+A UserData message can be added with a `UserDataAdd` message. It cannot be removed, but it can be set to a null value.
 
 ```protobuf
 message UserDataBody {
@@ -228,7 +228,7 @@ An fname is considered valid only if the most recent event for the fid `Transfer
 
 A Cast is a public message created by a user that contains text or URIs to other resources.
 
-Casts may specify another cast as their parent creating a threaded conversation. A thread has a root cast with no parent, and reply casts whose parents are the root or its descendants. Each thread is an acyclic trees since a reply can only be created after its parent is hashed and signed.
+Casts may specify another cast as their parent, creating a threaded conversation. A thread has a root cast with no parent and reply casts whose parents are the root or its descendants. Each thread is an acyclic trees since a reply can only be created after its parent is hashed and signed.
 
 ```mermaid
 graph TB
@@ -240,7 +240,7 @@ graph TB
     C-->G([cast:0x...981])
 ```
 
-A cast may mention users but mentions are stored separately from the text property. A mention is created by adding the user's fid to the `mentions` array and its position in bytes in the text field into the `mentions_positions` array. Casts may have up to 10 mentions.
+A cast may mention users, but mentions are stored separately from the text property. A mention is created by adding the user's fid to the `mentions` array and its position in bytes in the text field into the `mentions_positions` array. Casts may have up to 10 mentions.
 
 ```
 "@dwr and @v are big fans of @farcaster"
@@ -303,7 +303,7 @@ A CastId `c` is valid only if it passes these validations:
 
 A Reaction is a relationship between a user and a cast which can be one of several types.
 
-Reactions are added with a `ReactionAdd` message and removed with a `ReactionRemove` message which share a common body structure.
+Reactions are added with a `ReactionAdd` message and removed with a `ReactionRemove` message which shares a common body structure.
 
 ```protobuf
 message ReactionBody {
@@ -351,7 +351,7 @@ struct VerificationClaim {
 }
 ```
 
-An [EIP-712](https://eips.ethereum.org/EIPS/eip-712) signature is requested from the Ethereum address using the Farcaster domain separator. A Verification is then added by constructing a `VerificationAdd` message which includes the signature, and can be removed with a `VerificationRemove` message.
+An [EIP-712](https://eips.ethereum.org/EIPS/eip-712) signature is requested from the Ethereum address using the Farcaster domain separator. A Verification is then added by constructing a `VerificationAdd` message which includes the signature and can be removed with a `VerificationRemove` message.
 
 ```protobuf
 message VerificationAddEthAddressBody {
@@ -381,11 +381,11 @@ The delta-graph is a data structure that allows state to be updated concurrently
 
 It consists of a series of anonymous Δ-state CRDT's, each of which govern a data type and how it can be updated. CRDT's ensure that operations are commutative, associative and idempotent while never moving causally backward. Formally, CRDT's have a state S and a merge function merge(m, S) which returns a new state S' >= S.
 
-The delta-graph imposes additional rules that govern when messages can be added to a CRDT, usually depending on the external state. The delta-graph is idempotent but because of its dependency on state, it is not commutative, associative or guarantee to move causally forward.
+The delta-graph imposes additional rules that govern when messages can be added to a CRDT, usually depending on the external state. The delta-graph is idempotent but because of its dependency on state, it is not commutative, associative or guaranteed to move causally forward.
 
 ## 2.1 Signer CRDT
 
-Signer state must be managed with a Two-Phase Set CRDT[^two-phase-set] which keeps tracks of SignerAdd and SignerRemove messages using an add-set and a remove-set.
+Signer state must be managed with a Two-Phase Set CRDT[^two-phase-set] which keeps track of SignerAdd and SignerRemove messages using an add-set and a remove-set.
 
 A conflict occurs if two messages in the CRDT have the same values for `m.data.fid` and `m.data.body.signer`. The CRDT must resolve conflicts by applying the following rules:
 
@@ -401,7 +401,7 @@ UserData state must be managed with a Grow-Only Set CRDT which keeps track of Us
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if there exist two UserData messages that have the same values for `m.data.fid` and `m.data.body.type`. In such cases conflicts are resolved with the following rules:
+A conflict occurs if there exist two UserData messages that have the same values for `m.data.fid` and `m.data.body.type`. In such cases, conflicts are resolved with the following rules:
 
 1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
 2. If `m.data.timestamp` values are identical, discard the message with the lower lexicographical order.
@@ -412,7 +412,7 @@ Cast state must be managed with a Two-Phase Set CRDT which keeps track of CastAd
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if there exist a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. In such cases conflicts are resolved with the following rules:
+A conflict occurs if there exist a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. In such cases, conflicts are resolved with the following rules:
 
 2. If `m.data.type` is distinct, discard the `CastAdd` message.
 1. If `m.data.type` is identical and `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
@@ -460,7 +460,7 @@ The CRDT must limit the number of add and remove messages to a maximum of 50. Wh
 
 #### Fid Ownership
 
-Fid ownership is determined by the ID Registry contract. A custody address is valid only if the most recent event for the fid was a `Register` or `Transfer` event with the custody address in the `to` property.
+The ID Registry contract determines fid ownership. A custody address is valid only if the most recent event for the fid was a `Register` or `Transfer` event with the custody address in the `to` property.
 
 # 3. Hub Specifications
 
@@ -480,9 +480,9 @@ Hubs must perform a diff sync when they connect to the network to ensure that th
 
 ### 3.2.1 Trie
 
-Hubs must maintain a [Merkle Patricia Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/) which contains a Sync ID for each message in a CRDT.
+Hubs must maintain a [Merkle Patricia Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/), which contains a Sync ID for each message in a CRDT.
 
-A Message's Sync ID is a 36-byte value where the first 10 bytes are the timestamp and the last 10 bytes are the storage key. Using timestamp-prefixed ids makes the sync trie chronologically-ordered with the right most branch containing the sync id of the newest message. A simplified 4-byte version of the trie with 2-byte timestamps and keys is shown below.
+A Message's Sync ID is a 36-byte value where the first 10 bytes are the timestamp and the last 10 bytes are the storage key. Using timestamp-prefixed ids makes the sync trie chronologically-ordered with the rightmost branch containing the sync id of the newest message. A simplified 4-byte version of the trie with 2-byte timestamps and keys is shown below.
 
 ```mermaid
 graph TD
@@ -526,7 +526,7 @@ graph TD
 
 ### 3.2.2 Algorithm
 
-Hubs can discover missing messages between sync tries by comparing _exclusion sets_, which leverages the fact that tries are chronologically ordered with new messages usually added on the right-hand side. An exclusion node (green) is one that shares a parent with a node in the latest branch (red). Exclusion nodes at each level are combined and hashed to produce a unique exclusion value for each level of the trie. The set of exclusion values for all levels is the exclusion set, which is the array `[hash(2021), hash(oct, nov, dec), hash (1, 2)]` in the human-readable example trie below.
+Hubs can discover missing messages between sync tries by comparing _exclusion sets_, which leverages the fact that tries are chronologically ordered, with new messages usually added on the right-hand side. An exclusion node (green) is one that shares a parent with a node in the latest branch (red). Exclusion nodes at each level are combined and hashed to produce a unique exclusion value for each trie level. The set of exclusion values for all levels is the exclusion set, which is the array `[hash(2021), hash(oct, nov, dec), hash (1, 2)]` in the human-readable example trie below.
 
 <br/>
 
@@ -591,7 +591,7 @@ graph TD
 ```
 
 <br/>
-Hubs must then request the full trie under the divergent node, which must be compared to find missing branches. The branches are then converted into Sync IDs, which are requested from the other hub and merged into the CRDTs.
+Hubs must then request the full trie under the divergent node, which must be compared to find missing branches. The branches are then converted into Sync IDs, requested from the other Hub and merged into the CRDTs.
 
 ### 3.2.3 RPC Endpoints
 
@@ -648,7 +648,7 @@ Hubs implement a specific version of the protocol, which is advertised in their 
 
 A new version of the Hub must be released every 12 weeks that supports the latest protocol specification. The release will advertise the new version and peer with other Hubs that support the same version. It must also peer with older hubs up to 4 weeks after the version release date to ensure a transition period. Hubs must ship with a cutoff date which is set to 16 weeks after the specification release date. When the cutoff date is reached, the Hub will shut down immediately and refuse to start up.
 
-Backwards incompatible Hub changes can be introduced safely with feature flags in the release train system. The feature can be programmed to turn on after the 4 week point, when older hubs are guaranteed to be disconnected from the network. Hubs may use the Ethereum block timestamp to co-ordinate their clocks and synchronize the cut over.
+Backwards incompatible Hub changes can be introduced safely with feature flags in the release train system. The feature can be programmed to turn on after the 4 week point, when older hubs are guaranteed to be disconnected from the network. Hubs may use the Ethereum block timestamp to coordinate their clocks and synchronize the cutover.
 
 [^two-phase-set]: Shapiro, Marc; Preguiça, Nuno; Baquero, Carlos; Zawirski, Marek (2011). "A Comprehensive Study of Convergent and Commutative Replicated Data Types". Rr-7506.
 [^ed25519]: Bernstein, D.J., Duif, N., Lange, T. et al. High-speed high-security signatures. J Cryptogr Eng 2, 77–89 (2012). https://doi.org/10.1007/s13389-012-0027-1
