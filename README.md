@@ -4,7 +4,7 @@
 
 Farcaster is a community-created protocol for building decentralized social applications.
 
-Developers can use Farcaster to build new social networks, while the protocol handles the heavy lifting of decentralized identity and data storage. Users can create a new account that they control and sign up to use any of these applications. Users are always in control of their data and identity and can switch freely between applications.
+Developers can use Farcaster to build new, decentralized social networks, letting the protocol deal with the hard problems of managing user identities and data. Users can create a new account that they control and sign up to use any of these applications. Users are always in control of their data and identity and can switch freely between applications.
 
 ## Getting Started
 
@@ -17,7 +17,7 @@ Invites can be requested in one of two ways:
 
 ## Learn More
 
-The fastest way to get up to speed on the protocol is by watching the video series.
+The fastest way to get up to speed on the protocol is by watching the [video series](https://www.youtube.com/watch?v=vMWjol6xHJ0&list=PL0eq1PLf6eUdm35v_840EGLXkVJDhxhcF).
 
 [![Farcaster Overview](http://img.youtube.com/vi/vMWjol6xHJ0/0.jpg)](https://www.youtube.com/watch?v=vMWjol6xHJ0&list=PL0eq1PLf6eUdm35v_840EGLXkVJDhxhcF)
 
