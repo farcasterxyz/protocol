@@ -30,9 +30,9 @@ Farcaster is a protocol for building decentralized social applications. If you w
    1. [Release Schedule](#61-release-schedule)
 7. [Acknowledgements](#7-acknowledgements)
 8. [Appendix A: Proposals](#8-appendix-a-proposals)
-9. [Appendix B: Delta Specifications](#9-appendix-b-delta-specifications)
-10. [Appendix C: Application Specifications](#10-appendix-c-application-specifications)
-11. [Appendix D: Contract Specifications](#11-appendix-d-contract-specifications)
+9. [Appendix B: Message Specifications](#9-appendix-b-message-specifications)
+10. [Appendix C: CRDT Specifications](#10-appendix-c-crdt-specifications)
+11. [Appendix D: Contract Specifications](#11-appendix-c-contract-specifications)
 
 ## 1. Introduction
 
@@ -436,212 +436,218 @@ Many design choices have nuances and tradeoffs that are difficult to express ter
 - [Pruned Sets](https://hackmd.io/fCa8_RCEQ4qBYZjfnas9Zg)
 - [Farcaster Message Identifiers](https://hackmd.io/J82kyDFvT56umneqvX4IPA)
 
-# 9. Appendix B: Delta Specifications
+# 9. Appendix B: Message Specifications
 
-## 9.1 Signed Messages
+A Message is a cryptographically signed binary data object that represents a delta-operation on the Farcaster network.
 
-A Signed Message is a tamper-proof and self-authenticating data format that can represent a delta operation. A message is serialized as a binary [flatbuffer](https://github.com/google/flatbuffers) and is the interchange format for transmitting deltas over the Farcaster network. The specification uses an abbreviated flatbuffer-like schema to describe the data structure.
+Messages are specified and serialized into binary form using [proto3 protobufs](https://protobuf.dev/). Specifically, serialization of messages must be performed using [ts-proto@v1.146.0](https://github.com/stephenh/ts-proto) since serialization into bytes is not consistent across all implementations. A `Message` object contains the data payload and information required to verify the authenticity of the message.
 
-### 9.1.1 Message Object
-
-The `Message` object contains the payload of the message in a single data object and also includes a hash, which is used as a unique identifier, and a signature, which is used to ensure that the message hasn't been tampered with and to establish the author of the delta.
-
-```ts
-Message {
-  data: MessageData;               // variable length message data object
-  hash: [ubyte];                   // 16-byte hash digest of the message payload
-  hash_scheme: Enumeration;        // 1-byte hash scheme enum (e.g. BLAKE3)
-  signature: [ubyte];              // 32-byte signature of the message payload
-  signature_scheme: Enumeration;   // 1-byte signature scheme enum (e.g. EdDSA)
-  signer: [ubyte];                 // 20-byte address or 32-byte public key that signed the message
+```protobuf
+message Message {
+  MessageData data = 1;                  // Contents of the message
+  bytes hash = 2;                        // Hash digest of data
+  HashScheme hash_scheme = 3;            // Hash scheme that produced the hash digest
+  bytes signature = 4;                   // Signature of the hash digest
+  SignatureScheme signature_scheme = 5;  // Signature scheme that produced the signature
+  bytes signer = 6;                      // Public key or address of the key pair that produced the signature
 }
 ```
 
-The bytes of data are first passed through a hash function denoted by the hash_scheme which must be one of:
+A Message `m` is considered valid only if:
 
-- `Blake3 Scheme` - a 128-bit digest produced using [BLAKE3](https://github.com/BLAKE3-team/BLAKE3)
+1. `data` is a valid MessageData object
+2. `hash` is the serialized and hashed digest of data using ts-proto and `hash_scheme`
+3. `hash_scheme` is a currently valid hashing scheme
+4. `signature` is the signed output of `hash` using the `signature_scheme` and the `signer`
+5. `signature_scheme` is a valid scheme permitted by the MessageType
+6. `signer` is a valid public key or ethereum address used to produce the signature
 
-The bytes are then passed through a signature function specified by the signature scheme, which must be one of:
+#### Hashing
 
-- `ECDSA Scheme` - a 256-bit signature from an Ethereum address, where the signer is the address
-- `EdDSA Scheme` - a 256-bit signature from an EdDSA key pair, where the signer is the public key
+Message hashing is performed by serializing the `data` protobuf into bytes using ts-proto and then passing the bytes through a hashing function to obtain a digest. The valid hashing schemes are:
 
-### 9.1.2 Message Data
+- `BLAKE3`: A 160-bit [Blake3](https://github.com/BLAKE3-team/BLAKE3-specs) hash digest.
 
-A `MessageData` object contains generic properties like the fid, network and timestamp which are common to all deltas. The type of delta is indicated by the type property and the `MessageBody` contains properties specific to the type.
-
-```ts
-MessageData {
-  body: MessageBody;             // variable length message body, schema depends on type
-  fid: [ubyte];                  // variable length farcaster id of the user (max: 32 bytes)
-  network: Enumeration;          // 1-byte enumeration indicating the farcaster network
-  type: Enumeration;             // 1-byte enumeration indicating message type
-  timestamp: uint32;             // 4-byte epoch timestamp in seconds
+```protobuf
+enum HashScheme {
+  HASH_SCHEME_NONE = 0;
+  HASH_SCHEME_BLAKE3 = 1;
 }
 ```
+
+#### Signing
+
+Message signing is performed by taking the message hash and signing it to obtain a signature. There are several valid signing schemes, and the type of signature permitted is specified by the message type:
+
+- `ED25519`: A 512-bit [EdDSA signature](https://www.rfc-editor.org/rfc/rfc8032) for the edwards 25519 curve.
+- `EIP712`: A 512-bit [EIP-712](https://eips.ethereum.org/EIPS/eip-712) Typed Data Signature with a Farcaster separator.
+
+```protobuf
+enum SignatureScheme {
+  SIGNATURE_SCHEME_NONE = 0;
+  SIGNATURE_SCHEME_ED25519 = 1; // Ed25519 signature (default)
+  SIGNATURE_SCHEME_EIP712 = 2; // ECDSA signature using EIP-712 scheme
+}
+```
+
+#### Lexicographic Ordering
+
+Messages are totally ordered with a lexicographical scheme. Assume two messages $m$ and $n$ with hashes $x$ and $y$ of length $n$ represented as strings. If the ASCII values of all character pairs $(x_1, y_1), (x_2, y_2)$ are equal, the hashes are considered equal. Otherwise, compare the first distinct pair $(x_n, y_n)$ choosing $x$ as the winner if $x_n > y_n$ or $y$ otherwise.
+
+## 9.1 Message Data
+
+A MessageData contains the payload of the Message which is hashed and signed to produce the message.
+
+A `MessageData` object contains generic properties like the `fid`, `network` `timestamp` and `type` along with a `body`, which varies based on the `type`.
+
+```protobuf
+message MessageData {
+  MessageType type = 1;
+  uint64 fid = 2;
+  uint32 timestamp = 3;
+  FarcasterNetwork network = 4;
+  oneof body {
+    CastAddBody cast_add_body = 5;
+    CastRemoveBody cast_remove_body = 6;
+    ReactionBody reaction_body = 7;
+    VerificationAddEthAddressBody verification_add_eth_address_body = 9;
+    VerificationRemoveBody verification_remove_body = 10;
+    SignerAddBody signer_add_body = 11;
+    UserDataBody user_data_body = 12;
+    SignerRemoveBody signer_remove_body = 13;
+  }
+}
+```
+
+A MessageData `data` in a Message `m` must pass the following validations:
+
+1. `m.data.type` must be a valid Type.
+2. `m.data.body` must be a body type permitted by the MessageType.
+3. `m.data.timestamp` must be a valid Timestamp.
+4. `m.data.network` must be a valid Network.
+5. `m.data.fid` must be a valid Fid.
+6. `m.data.body` must be a valid body type.
+
+#### Types
+
+A MessageType defines the intent of a message and the expected payload in the body of the message. Each MessageType can have only one valid body, but a body can be associated with multiple message types. For example, `ReactionAdd` and `ReactionRemove` messages both have the same `ReactionBody` body type.
+
+```protobuf
+enum MessageType {
+  MESSAGE_TYPE_NONE = 0;
+  MESSAGE_TYPE_CAST_ADD = 1; // Add a new Cast
+  MESSAGE_TYPE_CAST_REMOVE = 2; // Remove an existing Cast
+  MESSAGE_TYPE_REACTION_ADD = 3; // Add a Reaction to a Cast
+  MESSAGE_TYPE_REACTION_REMOVE = 4; // Remove a Reaction from a Cast
+  MESSAGE_TYPE_VERIFICATION_ADD_ETH_ADDRESS = 7; // Add a Verification of an Ethereum Address
+  MESSAGE_TYPE_VERIFICATION_REMOVE = 8; // Remove a Verification
+  MESSAGE_TYPE_SIGNER_ADD = 9; // Add a new Ed25519 key pair that signs messages for a user
+  MESSAGE_TYPE_SIGNER_REMOVE = 10; // Remove an Ed25519 key pair that signs messages for a user
+  MESSAGE_TYPE_USER_DATA_ADD = 11; // Add metadata about a user
+}
+```
+
+#### Fids
+
+An fid is valid for a given message `m` if `m.signer`:
+
+1. is the custody address holding the fid according to the ID Registry contract.
+2. is a Signer whose `SignerAdd` message is in the Signer CRDT's add-set.
 
 #### Timestamps
 
-Messages must contain a `timestamp` which is an epoch timestamp in seconds. The start of the epoch is Jan 1st 2021, 0:00:00 GMT and all seconds are incremented from it. Timestamps cannot be set to future values since Hubs will reject messages that are ahead of their system clock.
+Timestamps must be milliseconds since the Farcaster epoch, which began on Jan 1, 2021 00:00:00 UTC. A timestamp is valid only if its implied time is <= 10 minutes ahead of the current system clock.
 
-#### Network
+#### Networks
 
-Messages must also specify a network value which determines which Farcaster network the message belongs to. Hubs connect to one specific network and will reject messages with other network identifiers, preventing replay attacks.
+Message identifiers ensure that messages cannot be replayed across different networks.
 
-```ts
-FarcasterNetwork {
-  Mainnet = 1,
-  Testnet = 2,
-  Devnet = 3
+```protobuf
+enum FarcasterNetwork {
+  FARCASTER_NETWORK_NONE = 0;
+  FARCASTER_NETWORK_MAINNET = 1; // Public, stable primary network
+  FARCASTER_NETWORK_TESTNET = 2; // Public, stable test network
+  FARCASTER_NETWORK_DEVNET = 3;  // Public, unstable test network
 }
 ```
-
-### 9.1.3 Message Types
-
-There are six types of stores on Farcaster:
-
-1. `Signers` - key pairs authorized to sign messages on behalf of a user
-2. `Cast` - public, text messages published by users
-3. `Reactions` - a graph relationship between a user and an object
-4. `Amp` - a graph relationship between two users
-5. `Verifications` - proofs of ownership of assets created by a user
-6. `UserData` - user metadata added by the user
-
-MessageType and MessageBody indicate the action being performed and the payload provided along with the action. For example, the action `ReactionRemove` may be selected which then requires the `ReactionBody` type which has information about the reaction being removed.
-
-```ts
-MessageBody {
-  CastAddBody,
-  CastRemoveBody,
-  ReactionBody,
-  AmpBody,
-  VerificationAddEthAddressBody,
-  VerificationRemoveBody,
-  SignerAddBody,
-  SignerRemoveBody,
-  UserDataBody
-}
-
-enum MessageType {
-  CastAdd = 1,
-  CastRemove = 2,
-  ReactionAdd = 3,
-  ReactionRemove = 4,
-  AmpAdd = 5,
-  AmpRemove = 6,
-  VerificationAddEthAddress = 7,
-  VerificationRemove = 8,
-  SignerAdd = 9,
-  SignerRemove = 10,
-  UserDataAdd = 11
-}
-```
-
-### 9.1.4 Storage
-
-Messages must be stored using an anonymous Δ-state CRDT and each delta type has its own CRDT. The rules of the CRDT ensure that a deltas can be added in a manner that is commutative, associative and idempotent while never moving causally backward. Formally, the CRDT has a state `S` and a merge function `merge(m, S)` which returns a new state `S' >= S`.
-
-While each CRDT has its own validations, all CRDTs must implement the following validations for a message `m`:
-
-1. `m.signer` must be a valid signer in the Signer CRDT for `message.fid`
-2. `hash(data))` must match `m.hash`, where hash is specified by `hash_scheme`
-3. `verify(m.data, m.signer, m.signature)` must be true, where verify is specified by `signature_scheme`
-4. `m.data.timestamp` must be no more than 1 minute ahead of the system clock.
-5. `m.data.fid` must be a known fid number in the ID Registry.
-
-#### Ordering
-
-A lexicographical ordering of messages can be determined by comparing the values of their hashes. Assume two messages $m$ and $n$ with hashes $x$ and $y$ of length $n$ represented as strings. If the ASCII values of all character pairs $(x_1, y_1), (x_2, y_2)$ are equal, the hashes are considered equal. Otherwise, compare the first distinct pair $(x_n, y_n)$ choosing $x$ as the winner if $x_n > y_n$ or $y$ otherwises.
 
 ## 9.2 Signers
 
-A _Signer_ is an Ed25519[^ed25519] key-pair that can sign messages on behalf of an fid. Every message in the delta-graph must be signed by a valid signer, except for the signer itself which must be signed by a valid custody address. Signers can be added and removed by users at any time with a `SignerAdd` and `SignerRemove`. When a signer is removed, all messages signed by it present in other CRDT's must now be considered invalid and evicted from those CRDTs. Each signer also contains an optional `name` field which is a human-readable name for the key pair.
+A _Signer_ is an Ed25519[^ed25519] key-pair that applications can use to authorize messages.
 
-```ts
-type SignerAddBody = {
-  name: string; // max 32 byte name of the signer
-  pubKey: string; // public key of the EdDSA key pair
-};
-
-type SignerRemoveBody = {
-  pubKey: string; // public key of the EdDSA key pair
-};
-```
-
-Signers also become inactive if their custody address become inactive, which happens when the user transfers their fid to another Ethereum address. Inactive signers are still considered valid for a period of 60 minutes after their custody address becomes inactive after which they are evicted. The grace period allows users to transfer their custody address and preserve their history by re-authorizing the same signers from the new address.
+A user authorizes an application's Signer with a signature from their custody address which currently holds their fid. The application can use the Signer to authorize Casts, Reactions and Verifications for that user. Users can revoke a Signer at any time with a signature from their custody address.
 
 ```mermaid
 graph TD
-    Custody1([Custody Address 1]) -.-> SignerA([Signer KeyPair A])
-    Custody1 -.->  SignerB([Signer KeyPair B])
-    style Custody1 stroke-dasharray: 5 5
-    style SignerA stroke-dasharray: 5 5
-    style SignerB stroke-dasharray: 5 5
-
-    Custody2([Custody Address 2]) --> SignerA1([Signer KeyPair A])
-    Custody2 -->  |ECDSA Signature|SignerC([Signer KeyPair C])
+    Custody2([Custody Address]) --> SignerA1([Signer A])
+    Custody2 -->  |ECDSA Signature|SignerC([Signer B])
     SignerC -->  CastA[Cast]
     SignerC -->  |EdDSA Signature| CastB[Cast]
     SignerA1 -->  CastC[Cast]
-    SignerA1 -->  CastD[Amp]
+    SignerA1 -->  CastD[Reaction]
 ```
 
-The Signer Store has a two-phase CRDT[^two-phase-set] with an add-set and a remove-set for each custody address for an fid. It keeps track of custody addresses by subscribing to `Register` and `Transfer` events from the Farcaster ID Registry. When a new message `m` is merged into the store it is added to the add-set or remove-set depending on the type of message. If it is an add message, it must pass the following validations:
+A Signer is added or removed with `SignerAdd` and `SignerRemove` messages that must contain the public key of the Signer. Signer messages must be signed by the custody address of the fid. A `SignerAdd` message may contain a human-readable label for identification purposes.
 
-1. `pubKey` must match the regular expression `^0x[a-fA-F0-9]{40}$`
-2. `signature_scheme` and `signature` must be an ECDSA signature
-3. `signer` must match that of a valid custody address
-
-A conflict occurs if there exists another message `n` with the same values for `m.data.fid`, `m.signer` and `m.body.pubKey`. In such cases, the following logic is followed by the merge function:
-
-1. If the timestamps are distinct, retain the message with the highest timestamps and discard the other one.
-2. If the timestamps are identical, and one message is a remove and the other is an add, retain the remove and discard the add.
-3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
-
-The store ensures that there is a maximum of 100 signer messages per fid.
-
-## 9.3 Casts
-
-A Cast is a public message created by a user which contains some text and is displayed on their account. Casts may also contain URI's pointing to media, on-chain activity or even other casts. Casts can also be removed by the user who created them at any time.
-
-```ts
-CastAddBody {
-  embeds: [string];
-  mentions: [UserId];
-  parent: CastId;
-  text: string (required);
+```protobuf
+message SignerAddBody {
+  bytes signer = 1;         // Ed25519 public key
+  optional string name = 2; // Optional human-readable label
 }
 
-CastRemoveBody {
-  targetHash: string;
-};
-
-
-CastId {
-  fid: [ubyte] (required);
-  ts_hash: [ubyte] (required);
-}
-
-UserId {
-  fid: [ubyte] (required);
+message SignerRemoveBody {
+  bytes signer = 1;         // Ed25519 public key
 }
 ```
 
-#### Mentions
+A SignerAddBody or SignerRemoveBody in a message `m` is only valid if it passes these validations:
 
-A user can _mention_ another Farcaster user inside cast by including their fid between a % symbol block. . A user can mention two users alice and bob, who have usernames @alice and @bob and fids 123 and 456 with the cast below.
+1. `m.data.body.signer` must by a 32-byte value
+2. `m.signature_scheme` must be an `SIGNATURE_SCHEME_EIP712`.
+3. `m.data.type` must be `MESSAGE_TYPE_USER_DATA_ADD`
+4. `m.signer` must be an Ethereum address that currently owns the fid `m.data.fid`
+5. `m.data.body.name` must be a UTF-8 string less than 32 bytes long (SignerAdd only)
 
-```ts
-{
-  text: "hello %0% and %1%",
-  mentions: [123, 456],
-  ...
+## 9.3 User Data
+
+A UserData message contains metadata about a user like their display name or profile picture.
+
+A UserData message can be added with a `UserDataAdd` message. It cannot be removed but it can be set to a null value.
+
+```protobuf
+message UserDataBody {
+  UserDataType type = 1;
+  string value = 2;
+}
+
+enum UserDataType {
+  USER_DATA_TYPE_NONE = 0;
+  USER_DATA_TYPE_PFP = 1;      // Profile Picture URL
+  USER_DATA_TYPE_DISPLAY = 2;  // Display Name
+  USER_DATA_TYPE_BIO = 3;      // Bio
+  USER_DATA_TYPE_URL = 5;      // Homepage URL
+  USER_DATA_TYPE_FNAME = 6;    // Preferred Fname
 }
 ```
 
-#### Replies
+A UserDataAddBody in a Message `m` is valid only if it passes these validations:
 
-A cast can be structured as replies to other casts or even non-cast objects like URL's, creating threaded conversations. An optional `parent` URI allows casts to indicate their parent which can be a cast, url or on-chain event. A threaded conversation of casts is a tree and the set of casts form a series of acyclic trees.
+1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
+2. `m.data.type` must be `MESSAGE_TYPE_USER_DATA_ADD`
+3. `m.data.body.type` must be a valid `UserDataType`
+4. If `m.data.body.type` is `USER_DATA_TYPE_PFP`, value must be <= 256 bytes
+5. If `m.data.body.type` is `USER_DATA_TYPE_DISPLAY`, value must be <= 32 bytes
+6. If `m.data.body.type` is `USER_DATA_TYPE_BIO`, value must be <= 256 bytes
+7. If `m.data.body.type` is `USER_DATA_TYPE_URL`, value must be <= 256 bytes
+8. If `m.data.body.type` is `USER_DATA_TYPE_FNAME`, value must map to a valid fname.
+
+An fname is considered valid only if the most recent event for the fid `Transfer` event with the custody address in the `to` property. If a valid fname for a given fid becomes invalid, and there is a UserDataAdd message for that fid with the fname as its value, it must be revoked.
+
+## 9.4 Casts
+
+A Cast is a public message created by a user that contains text or URIs to other resources.
+
+Casts may specify another cast as their parent creating a threaded conversation. A thread has a root cast with no parent, and reply casts whose parents are the root or its descendants. Each thread is an acyclic trees since a reply can only be created after its parent is hashed and signed.
 
 ```mermaid
 graph TB
@@ -651,149 +657,210 @@ graph TB
     B-->E([cast:0x...48b])
     B-->F([cast:0x...231])
     C-->G([cast:0x...981])
-
-
-    H(url:www.google.com/foo)-->I([cast:0x...14d])
-    H-->J([cast:0x...38d])
-    J-->K([cast:0x...ba4])
-    J-->L([cast:0x...dc1])
 ```
 
-#### Store
+A cast may mention users but mentions are stored separately from the text property. A mention is created by adding the user's fid to the `mentions` array and its position in bytes in the text field into the `mentions_positions` array. Casts may have up to 10 mentions.
 
-The Cast Store is a two-phase set CRDT which tracks add and remove cast messages. A cast add message must follow these rules:
+```
+"@dwr and @v are big fans of @farcaster"
 
-1. `embeds` must contain between 0 and 2 URIs, each of which can be up to 256 bytes
-2. `mentions` must contain between 0 and 5 Farcaster IDs
-3. `parent`, if present, must be a valid URI pointing
-4. `text` must contain <= 320 valid unicode character bytes
+{
+  text: ' and  are big fans of ',
+  mentions: [3, 2, 1],
+  mentionsPositions: [0, 5, 22],
+}
+```
 
-The conflict id $c$ for a cast-add message is the tuple `(fid, hash)` while the $c$ for a cast-remove message is `$(fid, targetHash)`. If a new message `m` is received that has an $c$ identical to that of another message `n`, it creates a conflict which is resolved with the following rules:
+Casts are added with a `CastAdd` message and removed with a tombstone `CastRemove` message, which ensures the message cannot be re-added while obscuring the original message's contents.
 
-1. If one message is a remove and the other is an add, retain the remove and discard the add.
-2. If the messages are of the same time and the timestamps are distinct, retain the one with the highest timestamp.
-3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
+```protobuf
+message CastAddBody {
+  repeated string embeds = 1;              // URIs to embed alongside the text
+  repeated uint64 mentions = 2;            // User fids mentioned in the text
+  oneof parent {
+    CastId parent_cast_id = 3;             // Optional parent of the cast
+  };
+  string text = 4;                         // Text of the cast
+  repeated uint32 mentions_positions = 5;  // Byte positions of the mentions in the text
+}
 
-The store ensures that there is a maximum of 10,000 cast messages per fid and any casts older than 1 year are expired from the set.
+message CastRemoveBody {
+  bytes target_hash = 1;                    // Message.hash value of the cast being removed
+}
+
+message CastId {
+  uint64 fid = 1;                           // Fid of the cast's author
+  bytes hash = 2;                           // Message.hash value of the cast
+}
+```
+
+A CastAddBody or CastRemoveBody in a message `m` is valid only if it passes these validations:
+
+1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
+2. `m.data.type` must be `MESSAGE_TYPE_CAST_ADD` or `MESSAGE_TYPE_CAST_REMOVE`
+3. `m.data.body.type` must be `CastAddBody` if `m.data.type` was `MESSAGE_TYPE_CAST_ADD`.
+4. `m.data.body.type` must be `CastRemoveBody` if `m.data.type` was `MESSAGE_TYPE_CAST_REMOVE`.
+5. `m.data.body.embeds` must contain between 0 and 2 strings of length <= 256 bytes
+6. `m.data.body.mentions` must contain between 0 and 10 256-bit integer values.
+7. `m.data.body.parent`, if present, must be a valid CastId
+8. `m.data.body.text` must contain <= 320 bytes.
+9. `m.data.body.mentions_positions` must have the same length as mentions with unique integers between 0 and the max byte size of `text`.
 
 ## 9.4 Reactions
 
-A Reaction is a type of link between a user and a target which can be a cast, url or on-chain activity. The two types of reactions are likes and recasts, and the protocol can be extended to support new types. Reactions can be added and removed at any time and represent an edge in the social graph. Add and remove messages for reactions have identical bodies with different types.
+A Reaction is a relationship between a user and a cast which can be one of several types.
 
-```ts
-ReactionBody {
-  cast: CastId;
-  type: ReactionType;
+Reactions are added with a `ReactionAdd` message and removed with a `ReactionRemove` message which share a common body structure.
+
+```protobuf
+message ReactionBody {
+  ReactionType type = 1; // Type of reaction
+  oneof target {
+    CastId target_cast_id = 2; // CastId of the Cast to react to
+  }
 }
 
-ReactionType {
-  Like = 1,
-  Recast = 2
-}
-```
-
-#### Store
-
-The Reaction Store is a two-phase set CRDT with last write wins semantics that stores add and remove reaction messages. Each user may store a maximum of 5,000 messages and messages may have a maximum age of 3 months.
-
-The conflict id $c$ for any type of reaction message is the triple `(fid, castId, type)` and only one reaction may exist per triple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
-
-1. If timestamps are distinct, retain the one with the highest timestamp.
-2. If one message is a remove and the other is an add, retain the remove and discard the add.
-3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
-
-## 9.5 Amps
-
-An Amp is a link between two users which indicates that one user is "boosting" the other. They can be added and removed at any time and represent an edge in the social graph. Add and remove messages for amps have identical bodies with different types.
-
-```ts
-table AmpBody {
-  user: UserId (required);
+/** Type of Reaction */
+enum ReactionType {
+  REACTION_TYPE_NONE = 0;
+  REACTION_TYPE_LIKE = 1; // Like the target cast
+  REACTION_TYPE_RECAST = 2; // Share target cast to the user's audience
 }
 ```
 
-#### Store
+A ReactionBody in a message `m` is valid only if it passes these validations:
 
-The Amp Store is a two-phase set CRDT with last write wins semantics that stores add and remove amp messages in separate sets. The store also ensures that there is a maximum of 100 messages per fid and messages may have a maximum age of 3 months.
+1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
+2. `m.data.type` must be `MESSAGE_TYPE_REACTION_ADD` or `MESSAGE_TYPE_REACTION_REMOVE`
+3. `m.data.body` must be `ReactionBody`.
+4. `m.data.body.type` must be a valid, non-zero ReactionType
+5. `m.data.body.target` must be a valid CastID
 
-The conflict id $c$ for any type of amp message is the tuple `(fid, userId)` and only one amp may exist per tuple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the rules:
+## 9.5 Verifications
 
-1. If timestamps are distinct, retain the one with the highest timestamp.
-2. If one message is a remove and the other is an add, retain the remove and discard the add.
-3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
+A Verification is a cryptographic proof of ownership of an Ethereum address.
 
-## 9.6 Verifications
-
-A verification is a bi-directional, cryptographic proof of ownership between a Farcaster account and an external account. They can be used to prove ownership of Ethereum addresses, specific NFTs, social media accounts, or domain names.
-
-A VerificationAdd message must contain an identifier for the external account and a signature from it. Each type of verification will have its own AddMessage since they may contain different types of identifiers and signatures. The conflict id $c$ of the verification is the identifier for the external account. Verification are removed with a VerificationRemove messages that contains the conflict identifier.
-
-### 9.6.1 Verification Messages
+A Verification requires a signed VerificationClaim produced by the Ethereum Address. The claim must be constructed with the following properties:
 
 ```ts
-VerificationAddEthAddressBody {
-  address: [ubyte];
-  eth_signature: [ubyte];     // must be an  [EIP 191 version 0x45](https://eips.ethereum.org/EIPS/eip-191) signature
-  block_hash: [ubyte];
-}
-
-table VerificationRemoveBody {
-  address: [ubyte] (required);
+struct VerificationClaim {
+  BigInt fid;         // Fid of the user making the claim
+  string address;     // Ethereum address signing the claim
+  string network;     // Farcaster network that the claim is meant for
+  string blockHash;   // Blockhash at which the claim was made
 }
 ```
 
-#### Store
+An [EIP-712](https://eips.ethereum.org/EIPS/eip-712) signature is requested from the Ethereum address using the domain separator:
 
-The Verification Store is a two-phase set CRDT with last write wins semantics that stores add and remove verification messages in separate sets. Each user can store a maximum of 50 messages, after which the oldest messages by timestamp-hash order are expired.
-
-The conflict id $c$ for any type of verification message is the tuple `(fid, address)` and only one verification may exist per tuple. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
-
-1. If timestamps are distinct, retain the one with the highest timestamp.
-2. If one message is a remove and the other is an add, retain the remove and discard the add.
-3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
-
-## 9.7 User Data
-
-User Data stores metadata about a user like their profile picture or display name. A fixed number of user data entries are permitted by the protocol and there is no remove operation, though values can be reset to null.
-
-```ts
-UserDataBody {
-  type: UserDataType = 1;
-  value: string;
-}
-
-UserDataType {
-  Pfp = 1,
-  Display = 2,
-  Bio = 3,
-  Location = 4,
-  Url = 5
+```json
+{
+  "name": "Farcaster Verify Ethereum Address",
+  "version": "2.0.0",
+  "salt": "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a558"
 }
 ```
 
-### 9.7.3 User Data Store
+A Verification is then added by constructing a `VerificationAdd` message which includes the signature, and can be removed with a `VerificationRemove` message.
 
-The User Data Store is a grow-only set CRDT with last write wins semantics that stores user data messages in a set. The conflict id $c$ for any user data message is the tuple `(fid, dataType)` and only one message may exist per type. If a new message `m` is received that has $c$ identical to that of another message `n` in either set it creates a conflict. Such collisions are handled with the following rules:
+```protobuf
+message VerificationAddEthAddressBody {
+  bytes address = 1;        // Ethereum address being verified
+  bytes eth_signature = 2;  // Signature produced by the user's Ethereum address
+  bytes block_hash = 3;     // Hash of the latest Ethereum block when the signature was produced
+}
 
-1. If timestamps are distinct, retain the one with the highest timestamp.
-2. If one message is a remove and the other is an add, retain the remove and discard the add.
-3. If the timestamps are identical and both messages are of the same type, retain the message with the highest lexicographical hash.
+message VerificationRemoveBody {
+  bytes address = 1;        // Address of the Verification to remove
+}
+```
 
-The store also ensures that there is a maximum of 100 messages per fid.
+A VerificationAddEthAddressBody or VerificationRemoveBody in a message `m` is valid only if it passes these validations:
 
-# 10. Appendix C: Application Specifications
+1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
+2. `m.data.type` must be `MESSAGE_TYPE_VERIFICATION_ADD_ETH_ADDRESS` or `MESSAGE_TYPE_VERIFICATION_REMOVE`
+3. `m.data.body` must be `VerificationAddEthAddressBody` if `m.data.type` was `MESSAGE_TYPE_VERIFICATION_ADD_ETH_ADDRESS`.
+4. `m.data.body` must be `VerificationRemoveBody` if `m.data.type` was `MESSAGE_TYPE_VERIFICATION_REMOVE`.
+5. `m.data.body.address` must be exactly 20 bytes long.
+6. `m.data.body.eth_signature` must be a valid EIP-712 signature of the VerificationClaim (VerificationAdd only)
+7. `m.data.body.block_hash` must be exactly 32 bytes long (VerificationAdd only)
 
-#### Rendering Casts
+# 10. Appendix C: CRDT Specifications
 
-Client should follow these rules when rendering casts:
+A CRDT is a conflict-free replicated data type that allows state to be updated concurrently by multiple devices without requiring a central authority to resolve conflicts.
 
-- Match all mentions in text with `/\%[0-4]\%/gm` and for each match `n` look up corresponding `fid` located at `mentions[n]`
-- Replace all mention matches (`%<num>%`) in text with `@fname` if it exists or the matched `!fid` otherwise.
-- Hyperlink all mention matches to the user's profile page.
+Farcaster stores each category of data in an anonymous Δ-state CRDT which ensures that state can be updated using delta-operations that are commutative, associative and idempotent while never moving causally backward. Formally, the CRDT has a state S and a merge function merge(m, S) which returns a new state S' >= S.
 
-Clients may also send notifications to their users or render them as hyperlinks in their UI
+## 10.1 Signer CRDT
 
-# 11. Appendix D: Contract Specifications
+Signer state must be managed with a Two-Phase Set CRDT[^two-phase-set] which keeps tracks of SignerAdd and SignerRemove messages using an add-set and a remove-set.
+
+A conflict occurs if two messages in the CRDT have the same values for `m.data.fid` and `m.data.body.signer`. The CRDT must resolve conflicts by applying the following rules:
+
+1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
+2. If `m.data.timestamp` values are identical, and `m.data.type` is distinct, discard the `SignerAdd` message.
+3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lower lexicographical order.
+
+The CRDT must also track the valid custody address for each fid. A custody address is valid only if the most recent event for the fid was a `Register` or `Transfer` event with the custody address in the `to` property. If a valid custody address for a given fid becomes invalid, all Signer messages for that fid signed by that custody address are discarded.
+
+The CRDT must also limit the number of add and remove messages to a maximum of 100. When the next message is added, the CRDT discards the message with the oldest timestamp removing it permanently. If there is a tie, the message with the lowest lexicographical order is discarded.
+
+When a Signer moves from the add-set into the remove-set or is discarded entirely, all messages signed by the signer in other CRDTs should be discarded.
+
+## 10.2 UserData CRDT
+
+UserData state must be managed with a Grow-Only Set CRDT which keeps track of UserDataAdd messages using an add-set. The CRDT also ensures that the message `m` passes these validations before being added:
+
+1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+
+A conflict occurs if there exist two UserData messages that have the same values for `m.data.fid` and `m.data.body.type`. In such cases conflicts are resolved with the following rules:
+
+1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
+2. If `m.data.timestamp` values are identical, discard the message with the lower lexicographical order.
+
+## 10.3 Cast CRDT
+
+Cast state must be managed with a Two-Phase Set CRDT which keeps track of CastAdd and CastRemove messages using an add-set and a remove-set. The CRDT also ensures that the message `m` passes these validations before being added:
+
+1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+
+A conflict occurs if there exist a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. In such cases conflicts are resolved with the following rules:
+
+2. If `m.data.type` is distinct, discard the `CastAdd` message.
+1. If `m.data.type` is identical and `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
+1. If `m.data.timestamp` and `m.data.type` values are identical, discard the message with the lower lexicographical order.
+
+The CRDT must limit the number of add and remove messages to a maximum of 10,000. When the next message is added, the CRDT discards the message with the oldest timestamp removing it permanently. If there is a tie, the message with the lowest lexicographical order is discarded. The CRDT also discards all messages whose timestamp is > 1 year from the current time.
+
+## 10.4 Reaction CRDT
+
+Reaction state must be managed with a Two-Phase Set CRDT which keeps track of `ReactionAdd` and `ReactionRemove` messages using an add-set and a remove-set. The CRDT also ensures that the message `m` passes these validations before being added:
+
+1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+
+A conflict occurs if there are two Reaction Messages with the same `m.data.fid`, `m.data.body.target` and `m.data.body.type` values. In such cases, conflicts are resolved with the following rules:
+
+1. If `m.data.timestamp` is distinct, discard the message with the lower timestamp.
+2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the ReactionAdd message.
+3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
+
+The CRDT must limit the number of add and remove messages to a maximum of 5,000. When the next message is added, the CRDT discards the message with the oldest timestamp removing it permanently. If there is a tie, the message with the lowest lexicographical order is discarded. The CRDT also discards all messages whose timestamp is > 3 months from the current time.
+
+## 10.5 Verification CRDT
+
+Verification state must be managed with a Two-Phase Set CRDT which keeps track of `VerificationAdd` and `VerificationRemove` messages in an add-set and a remove-set. The CRDT also ensures that the message `m` passes these validations before being added:
+
+1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+
+A conflict occurs if there are two Verification Messages with the same `m.data.fid`, `m.data.body.address` values. In such cases, conflicts are resolved with the following rules:
+
+1. If `m.data.timestamp` is distinct, discard the message with the lower timestamp.
+2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the ReactionAdd message.
+3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
+
+The CRDT must limit the number of add and remove messages to a maximum of 50. When the next message is added, the CRDT discards the message with the oldest timestamp removing it permanently. If there is a tie, the message with the lowest lexicographical order is discarded.
+
+# 11. Appendix C: Contract Specifications
 
 #### Username Policy
 
