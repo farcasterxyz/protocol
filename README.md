@@ -4,7 +4,18 @@
 
 Farcaster is a community-created protocol for building decentralized social applications.
 
-### Learn More
+Developers can use Farcaster to build new social networks, while the protocol handles the heavy lifting of decentralized identity and data storage. Users can create a new account that they control and sign up to use any of these applications. Users are always in control of their data and identity and can switch freely between applications.
+
+## Getting Started
+
+Farcaster is currently in early beta and user registrations are invite-only to ensure that the network remains stable. A community curated list of Farcaster applications and utilities is available in the [awesome-farcaster](https://github.com/a16z/awesome-farcaster) repository.
+
+Invites can be requested in one of two ways:
+
+1. By messaging [@dwr](https://twitter.com/dwr) on Twitter.
+2. By running a [Farcaster Testnet Hub](https://github.com/farcasterxyz/hub-monorepo/tree/main/apps/hubble), and posting your peer id in the [dev channel](https://t.me/farcasterdevchat).
+
+## Learn More
 
 The fastest way to get up to speed on the protocol is by watching the video series.
 
@@ -18,6 +29,6 @@ If you want to dig deeper, we also recommend that you:
 4. Review the [smart contracts](https://github.com/farcasterxyz/contracts) on the Ethereum blockchain.
 5. Dive into the [specifications](/docs/SPECIFICATION.md) to understand the low-level details.
 
-### Contributing
+## Contributing
 
 To make contributions to the protocol, please see the [contributing guidelines](CONTRIBUTING.md)
