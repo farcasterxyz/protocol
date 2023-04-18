@@ -75,9 +75,15 @@ enum SignatureScheme {
 }
 ```
 
-### Lexicographic Ordering
+### Timestamp-Hash Ordering
 
-Messages are totally ordered with a lexicographical scheme. Assume two messages $m$ and $n$ with hashes $x$ and $y$ of length $n$ represented as strings. If the ASCII values of all character pairs $(x_1, y_1), (x_2, y_2)$ are equal, the hashes are considered equal. Otherwise, compare the first distinct pair $(x_n, y_n)$ choosing $x$ as the winner if $x_n > y_n$ or $y$ otherwise.
+Messages are totally ordered by timestamp and hash. Assume two messages $m$ and $n$ with timestamps $m_t$ and $n_t$ hashes $m_h$ and $n_h$ of equal length. Ordering is determined by the following rules:
+
+1. If $m_t$ and $n_t$ are distinct, the larger value has the highest order.
+2. If $m_t$ and $n_t$ are not distinct, and $m_h$ and $n_h$ are distinct, perform a pairwise character comparison.
+3. If $m_t$ and $n_t$ are not distinct, and $m_h$ and $n_h$ are not distinct, $m$ and $n$ must be the same message.
+
+A pariwise comparison of two distinct hashes $x$ and $y$ is performed by comparing the ASCII values of the characters in $x$ and $y$ in order. The hash which has a higher ASCII character value for a distinct pair has the highest order.
 
 ## 1.1 Message Data
 
@@ -133,7 +139,7 @@ enum MessageType {
 
 #### Timestamps
 
-Timestamps must be milliseconds since the Farcaster epoch, which began on Jan 1, 2021 00:00:00 UTC.
+Timestamps must be seconds since the Farcaster epoch, which began on Jan 1, 2021 00:00:00 UTC.
 
 #### Networks
 
@@ -240,15 +246,13 @@ graph TB
     C-->G([cast:0x...981])
 ```
 
-A cast may mention users, but mentions are stored separately from the text property. A mention is created by adding the user's fid to the `mentions` array and its position in bytes in the text field into the `mentions_positions` array. Casts may have up to 10 mentions.
+A cast may mention users, but mentions are stored separately from the text property. A mention is created by adding the user's fid to the `mentions` array and its position in bytes in the text field into the `mentions_positions` array. Casts may have up to 10 mentions. The cast "🤓 @farcaster says hello" would be represented as:
 
-```
-"@dwr and @v are big fans of @farcaster"
-
+```ts
 {
-  text: ' and  are big fans of ',
-  mentions: [3, 2, 1],
-  mentionsPositions: [0, 5, 22],
+  text: '🤓  says hello',
+  mentions: [1],
+  mentionsPositions: [5],
 }
 ```
 
@@ -375,92 +379,93 @@ A VerificationAddEthAddressBody or VerificationRemoveBody in a message `m` is va
 6. `m.data.body.eth_signature` must be a valid EIP-712 signature of the VerificationClaim (VerificationAdd only)
 7. `m.data.body.block_hash` must be exactly 32 bytes long (VerificationAdd only)
 
-# 2. Delta-Graph Specifications
+# 2. Message-Graph Specifications
 
-The delta-graph is a data structure that allows state to be updated concurrently without requiring a central authority to resolve conflicts.
+A message-graph is a data structure that allows state to be updated concurrently without requiring a central authority to resolve conflicts. It consists of a series of anonymous Δ-state CRDT's, each of which govern a data type and how it can be updated. The message-graph is idempotent but because of its dependency on state, it is not commutative or associative.
 
-It consists of a series of anonymous Δ-state CRDT's, each of which govern a data type and how it can be updated. CRDT's ensure that operations are commutative, associative and idempotent while never moving causally backward. Formally, CRDT's have a state S and a merge function merge(m, S) which returns a new state S' >= S.
+## 2.1 CRDTs
 
-The delta-graph imposes additional rules that govern when messages can be added to a CRDT, usually depending on the external state. The delta-graph is idempotent but because of its dependency on state, it is not commutative, associative or guaranteed to move causally forward.
+A CRDT must accept a message only if it passes the message validation rules described above. CRDTs may also implement additional validation rules that depend on the state of other CRDTs or the blockchain. CRDTs must also specify their own rules to detect conflicts between valid messages and have a mechanism to resolve conflicts. All CRDTs implement a form of last-write-wins using the total message ordering, and some CRDTs also add remove-wins rules.
 
-## 2.1 Signer CRDT
+CRDTs also prune messages when they reach a certain age or size per user to prevent them from growing indefinitely. When adding a message crosses the size limit, the message in the CRDT with the lowest timestamp-hash order is pruned. When a message is older than the age limit specified as X seconds ago, it must also be pruned. Pruning should be performed once every hour on the hour in UTC to minimize sync thrash between Hubs.
 
-Signer state must be managed with a Two-Phase Set CRDT[^two-phase-set] which keeps track of SignerAdd and SignerRemove messages using an add-set and a remove-set.
+### 2.1.1 General Rules
 
-A conflict occurs if two messages in the CRDT have the same values for `m.data.fid` and `m.data.body.signer`. The CRDT must resolve conflicts by applying the following rules:
+All CRDTs must implement the following rules for validating messages:
+
+1. Messages with an EIP-712 signature scheme are only valid if the signing Ethereum address is the owner of the fid.
+2. Messages with an ED25519 signature scheme are only valid if the signing key pair is a Signer whose `SignerAdd` message is currently in the Signer CRDT's add-set.
+3. Messages are only valid if the fid is owned by the custody address that signed the message, or the signer of the message, which is specified by the Id Registry.
+
+External actions on blockchains or in other CRDTs can cause messages to become invalid. Such actions must cause an immediate revocation of messages which are discarded from CRDTs, according to the following rules:
+
+1. If an fid is transferred out of an Ethereum address, all Signer messages for that fid signed by that address must be revoked.
+2. When a SignerAdd is removed with a SignerRemove or is pruned, all messages signed by the signer in other CRDTs should be revoked.
+
+### 2.1.2 Signer CRDT
+
+The Signer CRDT validates and accepts SignerAdd and SignerRemove messages. A conflict occurs if two messages have the same values for `m.data.fid` and `m.data.body.signer`. Conflicts are resolved with the following rules:
 
 1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
 2. If `m.data.timestamp` values are identical, and `m.data.type` is distinct, discard the `SignerAdd` message.
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lower lexicographical order.
 
-The CRDT must also limit the number of add and remove messages to a maximum of 100. When the next message is added, the CRDT discards the message with the oldest timestamp removing it permanently. If there is a tie, the message with the lowest lexicographical order is discarded.
+The Signer CRDT has a per-user size limit of 1000.
 
-## 2.2 UserData CRDT
+### 2.1.3 UserData CRDT
 
-UserData state must be managed with a Grow-Only Set CRDT which keeps track of UserDataAdd messages using an add-set. The CRDT also ensures that the message `m` passes these validations before being added:
+The UserData CRDT validates and accepts UserDataAdd messages. The CRDT also ensures that a UserDataAdd message `m` passes these validations:
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if there exist two UserData messages that have the same values for `m.data.fid` and `m.data.body.type`. In such cases, conflicts are resolved with the following rules:
+A conflict occurs if two messages that have the same values for `m.data.fid` and `m.data.body.type`. Conflicts are resolved with the following rules:
 
 1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
 2. If `m.data.timestamp` values are identical, discard the message with the lower lexicographical order.
 
-## 2.3 Cast CRDT
+The UserData CRDT has a per-user size limit of 100, even though this is practically unreachable with the current schema.
 
-Cast state must be managed with a Two-Phase Set CRDT which keeps track of CastAdd and CastRemove messages using an add-set and a remove-set. The CRDT also ensures that the message `m` passes these validations before being added:
+### 2.1.4 Cast CRDT
+
+The Cast CRDT validates and accepts CastAdd and CastRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if there exist a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. In such cases, conflicts are resolved with the following rules:
+A conflict occurs if there exist a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. Conflicts are resolved with the following rules:
 
 2. If `m.data.type` is distinct, discard the `CastAdd` message.
 1. If `m.data.type` is identical and `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
 1. If `m.data.timestamp` and `m.data.type` values are identical, discard the message with the lower lexicographical order.
 
-The CRDT must limit the number of add and remove messages to a maximum of 10,000. When the next message is added, the CRDT discards the message with the oldest timestamp removing it permanently. If there is a tie, the message with the lowest lexicographical order is discarded. The CRDT also discards all messages whose timestamp is > 31,536,000 seconds (~ 1 year) from the current time.
+The Cast CRDT has a per-user size limit of 10,000 and an age limit of 31,536,000 or approximately 1 year.
 
-## 2.4 Reaction CRDT
+### 2.1.5 Reaction CRDT
 
-Reaction state must be managed with a Two-Phase Set CRDT which keeps track of `ReactionAdd` and `ReactionRemove` messages using an add-set and a remove-set. The CRDT also ensures that the message `m` passes these validations before being added:
+The Reaction CRDT validates and accepts ReactionAdd and ReactionRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if there are two Reaction Messages with the same `m.data.fid`, `m.data.body.target` and `m.data.body.type` values. In such cases, conflicts are resolved with the following rules:
+A conflict occurs if two messages have the same values for `m.data.fid`, `m.data.body.target` and `m.data.body.type`. Conflicts are resolved with the following rules:
 
 1. If `m.data.timestamp` is distinct, discard the message with the lower timestamp.
 2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the ReactionAdd message.
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
 
-The CRDT must limit the number of add and remove messages to a maximum of 5,000. When the next message is added, the CRDT discards the message with the oldest timestamp removing it permanently. If there is a tie, the message with the lowest lexicographical order is discarded. The CRDT also discards all messages whose timestamp is > 7,776,000 seconds (~90 days) from the current time.
+The Reaction CRDT has a per-user size limit of 5,000 and an age limit of 7,776,000 or approximately 90 days.
 
-## 2.5 Verification CRDT
+### 2.1.6 Verification CRDT
 
-Verification state must be managed with a Two-Phase Set CRDT which keeps track of `VerificationAdd` and `VerificationRemove` messages in an add-set and a remove-set. The CRDT also ensures that the message `m` passes these validations before being added:
+The Verification CRDT validates and accepts VerificationAddEthereumAddress and VerificationRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if there are two Verification Messages with the same `m.data.fid`, `m.data.body.address` values. In such cases, conflicts are resolved with the following rules:
+A conflict occurs if there are two messages with the same values for `m.data.fid`, `m.data.body.address`. Conflicts are resolved with the following rules:
 
 1. If `m.data.timestamp` is distinct, discard the message with the lower timestamp.
 2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the ReactionAdd message.
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
 
-The CRDT must limit the number of add and remove messages to a maximum of 50. When the next message is added, the CRDT discards the message with the oldest timestamp removing it permanently. If there is a tie, the message with the lowest lexicographical order is discarded.
-
-## 2.6 Delta-Graph Rules
-
-1. Messages with an EIP-712 signature scheme are only valid if the signing Ethereum address is the owner of the fid.
-
-2. Messages with an ED25519 signature scheme are only valid if the signing key pair is a Signer whose `SignerAdd` message is currently in the Signer CRDT's add-set.
-
-3. If an fid is transferred out of an Ethereum address, all Signer messages for that fid signed by that address must be discarded.
-
-4. When a Signer moves from the add-set to the remove set, or is discarded, all messages signed by the signer in other CRDTs should be discarded.
-
-#### Fid Ownership
-
-The ID Registry contract determines fid ownership. A custody address is valid only if the most recent event for the fid was a `Register` or `Transfer` event with the custody address in the `to` property.
+The Reaction CRDT has a per-user size limit of 50.
 
 # 3. Hub Specifications
 
@@ -470,7 +475,47 @@ Hubs monitor Farcaster contracts on Ethereum to track the state of identities on
 
 ## 3.1 Gossip Specifications
 
-Hubs communicate using [gossipsub](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md) implemented with [libp2p@0.42.2](https://libp2p.io/). The gossipsub network has a simple [floodsub](https://github.com/libp2p/js-libp2p-floodsub)-like configuration with a single mesh and two topics: contact and messages. A hub must join the network by using libp2p to connect to a bootstrap hub, which introduces it to other peers. The hub must subscribe to and republish messages on the messages topic, and periodically send out its IP address on the contact topic.
+Hubs communicate using [gossipsub](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md) implemented with [libp2p@0.42.2](https://libp2p.io/).
+
+A hub must join the network by using libp2p to connect to a bootstrap hub, which introduces it to other peers. The gossipsub network has a simple [floodsub](https://github.com/libp2p/js-libp2p-floodsub)-like configuration with a single mesh. Hubs must subscribe to two topics: primary, which is used to broadcast messages and contact info, which is used to exchange contact information to dial hubs. The topics are specific to each network and the topics for mainnet (id: 1) are:
+
+```
+f_network_1_primary
+f_network_1_contact_info
+```
+
+Gossip messages are protobufs that adhere to the following schema:
+
+```protobuf
+message GossipAddressInfo {
+  string address = 1;
+  uint32 family = 2;
+  uint32 port = 3;
+  string dns_name = 4;
+}
+
+message ContactInfoContent {
+  GossipAddressInfo gossip_address = 1;
+  GossipAddressInfo rpc_address = 2;
+  repeated string excluded_hashes = 3;
+  uint32 count = 4;
+  string hub_version = 5;
+  FarcasterNetwork network = 6;
+}
+
+message GossipMessage {
+  oneof content {
+    Message message = 1;
+    IdRegistryEvent id_registry_event = 2;
+    ContactInfoContent contact_info_content = 3;
+  }
+  repeated string topics = 4;
+  bytes peer_id = 5;
+  GossipVersion version = 6;
+}
+```
+
+Hubs must ingest all messages received on the messages topic and attempt to merge them, and then rebroadcast them to other hubs. Hubs must also send out its contact information every 60 seconds on the contact_info topic.
 
 ## 3.2 Sync Specifications
 
@@ -480,9 +525,17 @@ Hubs must perform a diff sync when they connect to the network to ensure that th
 
 ### 3.2.1 Trie
 
-Hubs must maintain a [Merkle Patricia Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/), which contains a Sync ID for each message in a CRDT.
+Hubs must maintain a [Merkle Patricia Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/), which contains a Sync ID for each message in a CRDT. A Message's Sync ID is a 36-byte value that is constructed using information in the message:
 
-A Message's Sync ID is a 36-byte value where the first 10 bytes are the timestamp and the last 10 bytes are the storage key. Using timestamp-prefixed ids makes the sync trie chronologically-ordered with the rightmost branch containing the sync id of the newest message. A simplified 4-byte version of the trie with 2-byte timestamps and keys is shown below.
+```
+10 bytes: timestamp
+1 byte:   message type
+4 bytes:  fid
+1 byte:   crdt / set type
+20 bytes: hash
+```
+
+Using timestamp-prefixed ids makes the sync trie chronologically-ordered with the rightmost branch containing the sync id of the newest message. A simplified 4-byte version of the trie with 2-byte timestamps and keys is shown below.
 
 ```mermaid
 graph TD
@@ -636,11 +689,146 @@ message TrieNodePrefix {
 }
 ```
 
+Hubs must also implement the following methods for client RPCs:
+
+```protobuf
+service HubService {
+  // Submit Methods
+  rpc SubmitMessage(Message) returns (Message);
+
+  // Event Methods
+  rpc Subscribe(SubscribeRequest) returns (stream HubEvent);
+  rpc GetEvent(EventRequest) returns (HubEvent);
+
+  // Casts
+  rpc GetCast(CastId) returns (Message);
+  rpc GetCastsByFid(FidRequest) returns (MessagesResponse);
+  rpc GetCastsByParent(CastsByParentRequest) returns (MessagesResponse);
+  rpc GetCastsByMention(FidRequest) returns (MessagesResponse);
+
+  // Reactions
+  rpc GetReaction(ReactionRequest) returns (Message);
+  rpc GetReactionsByFid(ReactionsByFidRequest) returns (MessagesResponse);
+  rpc GetReactionsByCast(ReactionsByCastRequest) returns (MessagesResponse);
+
+  // User Data
+  rpc GetUserData(UserDataRequest) returns (Message);
+  rpc GetUserDataByFid(FidRequest) returns (MessagesResponse);
+  rpc GetNameRegistryEvent(NameRegistryEventRequest) returns (NameRegistryEvent);
+
+  // Verifications
+  rpc GetVerification(VerificationRequest) returns (Message);
+  rpc GetVerificationsByFid(FidRequest) returns (MessagesResponse);
+
+  // Signer
+  rpc GetSigner(SignerRequest) returns (Message);
+  rpc GetSignersByFid(FidRequest) returns (MessagesResponse);
+  rpc GetIdRegistryEvent(IdRegistryEventRequest) returns (IdRegistryEvent);
+  rpc GetIdRegistryEventByAddress(IdRegistryEventByAddressRequest) returns (IdRegistryEvent);
+  rpc GetFids(FidsRequest) returns (FidsResponse);
+
+  // Bulk Methods
+  rpc GetAllCastMessagesByFid(FidRequest) returns (MessagesResponse);
+  rpc GetAllReactionMessagesByFid(FidRequest) returns (MessagesResponse);
+  rpc GetAllVerificationMessagesByFid(FidRequest) returns (MessagesResponse);
+  rpc GetAllSignerMessagesByFid(FidRequest) returns (MessagesResponse);
+  rpc GetAllUserDataMessagesByFid(FidRequest) returns (MessagesResponse);
+}
+
+message SubscribeRequest {
+  repeated HubEventType event_types = 1;
+  optional uint64 from_id = 2;
+}
+
+message EventRequest {
+  uint64 id = 1;
+}
+
+message FidRequest {
+  uint64 fid = 1;
+  optional uint32 page_size = 2;
+  optional bytes page_token = 3;
+  optional bool reverse = 4;
+}
+
+message FidsRequest {
+  optional uint32 page_size = 1;
+  optional bytes page_token = 2;
+  optional bool reverse = 3;
+}
+
+message FidsResponse {
+  repeated uint64 fids = 1;
+  optional bytes next_page_token = 2;
+}
+
+message MessagesResponse {
+  repeated Message messages = 1;
+  optional bytes next_page_token = 2;
+}
+
+message CastsByParentRequest {
+  CastId cast_id = 1;
+  optional uint32 page_size = 2;
+  optional bytes page_token = 3;
+  optional bool reverse = 4;
+}
+
+message ReactionRequest {
+  uint64 fid = 1;
+  ReactionType reaction_type = 2;
+  CastId cast_id = 3;
+}
+
+message ReactionsByFidRequest {
+  uint64 fid = 1;
+  optional ReactionType reaction_type = 2;
+  optional uint32 page_size = 3;
+  optional bytes page_token = 4;
+  optional bool reverse = 5;
+}
+
+message ReactionsByCastRequest {
+  CastId cast_id = 1;
+  optional ReactionType reaction_type = 2;
+  optional uint32 page_size = 3;
+  optional bytes page_token = 4;
+  optional bool reverse = 5;
+}
+
+message UserDataRequest {
+  uint64 fid = 1;
+  UserDataType user_data_type = 2;
+}
+
+message NameRegistryEventRequest {
+  bytes name = 1;
+}
+
+message VerificationRequest {
+  uint64 fid = 1;
+  bytes address = 2;
+}
+
+message SignerRequest {
+  uint64 fid = 1;
+  bytes signer = 2;
+}
+
+message IdRegistryEventRequest {
+  uint64 fid = 1;
+}
+
+message IdRegistryEventByAddressRequest {
+  bytes address = 1;
+}
+```
+
 # 4. Versioning
 
 Farcaster is a long-lived protocol built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers.
 
-The protocol specification is date versioned with a non-zero leading `YYYY.MM.DD` format like `2021.3.1`. A new version of the protocol specification must be released every 12 weeks. Hot-fix releases are permitted in-between regular if necessary.
+The protocol specification is date versioned with a non-zero leading `YYYY.MM.DD` format like `2021.3.1`. A new version of the protocol specification must be released every 6 weeks. Hot-fix releases are permitted in-between regular if necessary.
 
 ## 4.1 Upgrade Process
 
@@ -650,5 +838,4 @@ A new version of the Hub must be released every 12 weeks that supports the lates
 
 Backwards incompatible Hub changes can be introduced safely with feature flags in the release train system. The feature can be programmed to turn on after the 4 week point, when older hubs are guaranteed to be disconnected from the network. Hubs may use the Ethereum block timestamp to coordinate their clocks and synchronize the cutover.
 
-[^two-phase-set]: Shapiro, Marc; Preguiça, Nuno; Baquero, Carlos; Zawirski, Marek (2011). "A Comprehensive Study of Convergent and Commutative Replicated Data Types". Rr-7506.
 [^ed25519]: Bernstein, D.J., Duif, N., Lange, T. et al. High-speed high-security signatures. J Cryptogr Eng 2, 77–89 (2012). https://doi.org/10.1007/s13389-012-0027-1
