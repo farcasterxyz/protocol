@@ -260,14 +260,17 @@ Casts are added with a `CastAdd` message and removed with a tombstone `CastRemov
 
 ```protobuf
 message CastAddBody {
-  repeated string embeds = 1;              // URIs to embed alongside the text
-  repeated uint64 mentions = 2;            // User fids mentioned in the text
-  oneof parent {
-    CastId parent_cast_id = 3;             // Optional parent of the cast
+  repeated string embeds_deprecated = 1;  // Deprecated embeds field
+  repeated uint64 mentions = 2;           // User fids mentioned in the text
+  oneof parent {                          // Optional parent of the cast
+    CastId parent_cast_id = 3;
+    string parent_url = 7; // Parent URL
   };
-  string text = 4;                         // Text of the cast
-  repeated uint32 mentions_positions = 5;  // Byte positions of the mentions in the text
+  string text = 4;                        // Text of the cast
+  repeated uint32 mentions_positions = 5; // Byte positions of the mentions in the text
+  repeated Embed embeds = 6;              // URIs or CastIds to embedded in the cast
 }
+
 
 message CastRemoveBody {
   bytes target_hash = 1;                    // Message.hash value of the cast being removed
@@ -277,6 +280,13 @@ message CastId {
   uint64 fid = 1;                           // Fid of the cast's author
   bytes hash = 2;                           // Message.hash value of the cast
 }
+
+message Embed {
+  oneof embed {
+    string url = 1;
+    CastId cast_id = 2;
+  }
+}
 ```
 
 A CastAddBody in a message `m` is valid only if it passes these validations:
@@ -284,12 +294,13 @@ A CastAddBody in a message `m` is valid only if it passes these validations:
 1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
 2. `m.data.type` must be `MESSAGE_TYPE_CAST_ADD`.
 3. `m.data.body.type` must be `CastAddBody`.
-4. `m.data.body.embeds` can contain up to 2 valid utf8 strings are between 1 and 256 bytes inclusive.
+4. `m.data.body.embeds_deprecated` can contain up to 2 valid utf8 strings are between 1 and 256 bytes inclusive.
 5. `m.data.body.mentions` must contain between 0 and 10 256-bit integer values.
-6. `m.data.body.parent`, if present, must be a valid CastId
+6. `m.data.body.parent`, if present, must be a valid CastId or a utf8 string that is between 1 and 256 bytes inclusive.
 7. `m.data.body.text` must contain <= 320 bytes and be a valid utf8 string.
 8. `m.data.body.mentions_positions` must have unique integers between 0 and length of `text` inclusive.
 9. `m.data.body.mentions_positions` integers must be in ascending order and must have as many elements as `mentions`.
+10. `m.data.body.embeds` can contain up to 2 CastIds or valid utf8 strings that are between 1 and 256 bytes inclusive.
 
 A CastRemoveBody in a message `m` is valid only if it passes these validations:
 
@@ -313,7 +324,8 @@ Reactions are added with a `ReactionAdd` message and removed with a `ReactionRem
 message ReactionBody {
   ReactionType type = 1; // Type of reaction
   oneof target {
-    CastId target_cast_id = 2; // CastId of the Cast to react to
+    CastId target_cast_id = 2; // CastId being reacted to
+    string target_url = 3;     // URL being reacted to
   }
 }
 
@@ -330,7 +342,7 @@ A Reaction message `m` must pass these validations and the validations for React
 1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
 2. `m.data.body` must be `ReactionBody`.
 3. `m.data.body.type` must be a valid, non-zero ReactionType
-4. `m.data.body.target` must be a valid CastId
+4. `m.data.body.target` must be a valid CastId or a utf8 string between 1 and 256 bytes inclusive.
 
 A ReactionAdd message `m` is valid only if it passes these validations:
 
@@ -709,7 +721,8 @@ service HubService {
   // Reactions
   rpc GetReaction(ReactionRequest) returns (Message);
   rpc GetReactionsByFid(ReactionsByFidRequest) returns (MessagesResponse);
-  rpc GetReactionsByCast(ReactionsByCastRequest) returns (MessagesResponse);
+  rpc GetReactionsByCast(ReactionsByTargetRequest) returns (MessagesResponse); // To be deprecated
+  rpc GetReactionsByTarget(ReactionsByTargetRequest) returns (MessagesResponse);
 
   // User Data
   rpc GetUserData(UserDataRequest) returns (Message);
@@ -768,7 +781,10 @@ message MessagesResponse {
 }
 
 message CastsByParentRequest {
-  CastId cast_id = 1;
+  oneof parent {
+    CastId parent_cast_id = 1;
+    string parent_url = 5;
+  }
   optional uint32 page_size = 2;
   optional bytes page_token = 3;
   optional bool reverse = 4;
@@ -777,7 +793,10 @@ message CastsByParentRequest {
 message ReactionRequest {
   uint64 fid = 1;
   ReactionType reaction_type = 2;
-  CastId cast_id = 3;
+  oneof target {
+    CastId target_cast_id = 3;
+    string target_url = 4;
+  }
 }
 
 message ReactionsByFidRequest {
@@ -788,8 +807,11 @@ message ReactionsByFidRequest {
   optional bool reverse = 5;
 }
 
-message ReactionsByCastRequest {
-  CastId cast_id = 1;
+message ReactionsByTargetRequest {
+  oneof target {
+    CastId target_cast_id = 1;
+    string target_url = 6;
+  }
   optional ReactionType reaction_type = 2;
   optional uint32 page_size = 3;
   optional bytes page_token = 4;
