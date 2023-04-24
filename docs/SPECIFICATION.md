@@ -2,7 +2,7 @@
 
 Requirements to implement a functional version of the Farcaster protocol.
 
-Version: `2023.3.1`
+Version: `2023.4.19`
 
 ## Table of Contents
 
