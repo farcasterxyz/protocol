@@ -2,7 +2,7 @@
 
 Requirements to implement a functional version of the Farcaster protocol.
 
-Version: `2023.3.1`
+Version: `2023.5.31`
 
 ## Table of Contents
 
@@ -106,6 +106,7 @@ message MessageData {
     SignerAddBody signer_add_body = 11;
     UserDataBody user_data_body = 12;
     SignerRemoveBody signer_remove_body = 13;
+    LinkBody link_body = 14;
   }
 }
 ```
@@ -129,6 +130,8 @@ enum MessageType {
   MESSAGE_TYPE_CAST_REMOVE = 2;                  // Remove a previously added Cast
   MESSAGE_TYPE_REACTION_ADD = 3;                 // Add a Reaction to a Cast
   MESSAGE_TYPE_REACTION_REMOVE = 4;              // Remove a Reaction previously added to a Cast
+  MESSAGE_TYPE_LINK_ADD = 5;                     // Add a new Link
+  MESSAGE_TYPE_LINK_REMOVE = 6;                  // Remove an existing Link
   MESSAGE_TYPE_VERIFICATION_ADD_ETH_ADDRESS = 7; // Add an Ethereum Address Verification
   MESSAGE_TYPE_VERIFICATION_REMOVE = 8;          // Remove a previously added Verification
   MESSAGE_TYPE_SIGNER_ADD = 9;                   // Add a key pair that signs messages for a user
@@ -390,6 +393,36 @@ A VerificationAddEthAddressBody or VerificationRemoveBody in a message `m` is va
 5. `m.data.body.address` must be exactly 20 bytes long.
 6. `m.data.body.eth_signature` must be a valid EIP-712 signature of the VerificationClaim (VerificationAdd only)
 7. `m.data.body.block_hash` must be exactly 32 bytes long (VerificationAdd only)
+
+## 1.6 Links
+
+A Link is a relationship between two users which can be one of several types. Links are added with a `LinkAdd` message and removed with a  `LinkRemove` message which shares a common body structure.
+
+```
+message LinkBody {
+  string type = 1;
+  optional uint32 displayTimestamp = 2;
+  oneof target {
+    uint64 fid = 3;
+  }
+}
+```
+
+A Link message `m` must pass these validations and the validations for LinkAdd or LinkRemove:
+
+1.  `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
+2.  `m.data.body` must be `LinkBody`.
+3.  `m.data.body.type` must be ≤ 8 bytes.
+4.  `m.data.body.target` must be a known fid.
+5.  `m.data.body.displayTimestamp` must be ≤ `m.data.timestamp`
+
+A LinkAdd message `m` is valid only if it passes these validations:
+
+1.  `m.data.type` must be `MESSAGE_TYPE_LINK_ADD`
+
+A LinkRemove in a message `m` is valid only if it passes these validations:
+
+1.  `m.data.type` must be `MESSAGE_TYPE_LINK_REMOVE`
 
 # 2. Message-Graph Specifications
 
@@ -724,6 +757,12 @@ service HubService {
   rpc GetReactionsByCast(ReactionsByTargetRequest) returns (MessagesResponse); // To be deprecated
   rpc GetReactionsByTarget(ReactionsByTargetRequest) returns (MessagesResponse);
 
+  //Links
+  rpc GetLink(LinkRequest) returns (Message);
+  rpc GetLinksByFid(LinksByFidRequest) returns (MessagesResponse);
+  rpc GetLinksByTarget(LinksByTargetRequest) returns (MessagesResponse);
+  rpc GetAllLinkMessagesByFid(FidRequest) returns (MessagesResponse);
+
   // User Data
   rpc GetUserData(UserDataRequest) returns (Message);
   rpc GetUserDataByFid(FidRequest) returns (MessagesResponse);
@@ -813,6 +852,32 @@ message ReactionsByTargetRequest {
     string target_url = 6;
   }
   optional ReactionType reaction_type = 2;
+  optional uint32 page_size = 3;
+  optional bytes page_token = 4;
+  optional bool reverse = 5;
+}
+
+message LinkRequest {
+  uint64 fid = 1;
+  string link_type = 2;
+  oneof target {
+    uint64 target_fid = 3;
+  }
+}
+
+message LinksByFidRequest {
+  uint64 fid = 1;
+  optional string link_type = 2;
+  optional uint32 page_size = 3;
+  optional bytes page_token = 4;
+  optional bool reverse = 5;
+}
+
+message LinksByTargetRequest {
+  oneof target {
+    uint64 target_fid = 1;
+  }
+  optional string link_type = 2;
   optional uint32 page_size = 3;
   optional bytes page_token = 4;
   optional bool reverse = 5;
