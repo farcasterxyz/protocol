@@ -398,10 +398,10 @@ A VerificationAddEthAddressBody or VerificationRemoveBody in a message `m` is va
 
 A Link is a relationship between two users which can be one of several types. Links are added with a `LinkAdd` message and removed with a  `LinkRemove` message which shares a common body structure.
 
-```
+```protobuf
 message LinkBody {
   string type = 1;
-  optional uint32 displayTimestamp = 2;
+  optional uint32 displayTimestamp = 2; // If set, clients should use this as the follow create time
   oneof target {
     uint64 fid = 3;
   }
