@@ -7,7 +7,7 @@ Version: `2023.5.31`
 ## Table of Contents
 
 1. [Message Specifications](#1-message-specifications)
-2. [CRDT Specifications](#2-crdt-specifications)
+2. [CRDT Specifications](#2-message-graph-specifications)
 3. [Hub Specifications](#3-hub-specifications)
 4. [Versioning](#4-versioning)
 
@@ -478,7 +478,7 @@ The Cast CRDT validates and accepts CastAdd and CastRemove messages. The CRDT al
 
 A conflict occurs if there exist a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. Conflicts are resolved with the following rules:
 
-2. If `m.data.type` is distinct, discard the `CastAdd` message.
+2. If `m.data.type` is distinct, discard the CastAdd message.
 1. If `m.data.type` is identical and `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
 1. If `m.data.timestamp` and `m.data.type` values are identical, discard the message with the lower lexicographical order.
 
@@ -507,10 +507,10 @@ The Verification CRDT validates and accepts VerificationAddEthereumAddress and V
 A conflict occurs if there are two messages with the same values for `m.data.fid`, `m.data.body.address`. Conflicts are resolved with the following rules:
 
 1. If `m.data.timestamp` is distinct, discard the message with the lower timestamp.
-2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the ReactionAdd message.
+2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the VerificationAdd message.
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
 
-The Reaction CRDT has a per-user size limit of 50.
+The Verification CRDT has a per-user size limit of 50.
 
 # 3. Hub Specifications
 
