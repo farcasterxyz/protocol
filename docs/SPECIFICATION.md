@@ -512,6 +512,20 @@ A conflict occurs if there are two messages with the same values for `m.data.fid
 
 The Reaction CRDT has a per-user size limit of 50.
 
+### 2.1.7 Link CRDT
+
+The Link CRDT validates and accepts LinkAdd and LinkRemove messages. The CRDT also ensures that the message `m` passes these validations:
+
+1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+
+A conflict occurs if there are two messages with the same values for `m.data.fid`, `m.data.body.type`, `m.data.body.target`. Conflicts are resolved with the following rules:
+
+1. If `m.data.timestamp` is distinct, discard the message with the lower timestamp.
+2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the LinkAdd message.
+3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
+
+The Link CRDT has a per-user size limit of 2500.
+
 # 3. Hub Specifications
 
 A Hub is a node in the Farcaster network that provides an eventually consistent view of network state.
