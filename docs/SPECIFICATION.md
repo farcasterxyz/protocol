@@ -2,7 +2,7 @@
 
 Requirements to implement a functional version of the Farcaster protocol.
 
-Version: `2023.5.31`
+Version: `2023.7.12`
 
 ## Table of Contents
 
@@ -107,6 +107,7 @@ message MessageData {
     UserDataBody user_data_body = 12;
     SignerRemoveBody signer_remove_body = 13;
     LinkBody link_body = 14;
+    UserNameProof username_proof_body = 15;
   }
 }
 ```
@@ -137,6 +138,7 @@ enum MessageType {
   MESSAGE_TYPE_SIGNER_ADD = 9;                   // Add a key pair that signs messages for a user
   MESSAGE_TYPE_SIGNER_REMOVE = 10;               // Remove a previously added key pair
   MESSAGE_TYPE_USER_DATA_ADD = 11;               // Add metadata about a user
+  MESSAGE_TYPE_USERNAME_PROOF = 12;              // Add or replace a username proof
 }
 ```
 
@@ -215,7 +217,7 @@ enum UserDataType {
   USER_DATA_TYPE_DISPLAY = 2;  // Display Name
   USER_DATA_TYPE_BIO = 3;      // Bio
   USER_DATA_TYPE_URL = 5;      // Homepage URL
-  USER_DATA_TYPE_FNAME = 6;    // Preferred Fname
+  USER_DATA_TYPE_USERNAME = 6; // Preferred username
 }
 ```
 
@@ -228,7 +230,7 @@ A UserDataAddBody in a Message `m` is valid only if it passes these validations:
 5. If `m.data.body.type` is `USER_DATA_TYPE_DISPLAY`, value must be <= 32 bytes
 6. If `m.data.body.type` is `USER_DATA_TYPE_BIO`, value must be <= 256 bytes
 7. If `m.data.body.type` is `USER_DATA_TYPE_URL`, value must be <= 256 bytes
-8. If `m.data.body.type` is `USER_DATA_TYPE_FNAME`, value must map to a valid fname.
+8. If `m.data.body.type` is `USER_DATA_TYPE_USERNAME`, value must map to a valid fname.
 9. `m.data.body.value` must be a valid utf-8 string
 
 An fname is considered valid only if the most recent event for the fid `Transfer` event with the custody address in the `to` property. If a valid fname for a given fid becomes invalid, and there is a UserDataAdd message for that fid with the fname as its value, it must be revoked.
@@ -424,6 +426,51 @@ A LinkRemove in a message `m` is valid only if it passes these validations:
 
 1.  `m.data.type` must be `MESSAGE_TYPE_LINK_REMOVE`
 
+## 1.7 UserNameProofs
+
+A Username Proof demonstrates that a user owns a particular ENS name. The proof is established by creating a signature from an Ethereum address or Farcaster Signer along with additional metadata about the name and Farcaster user.
+
+```protobuf
+enum UserNameType {
+  USERNAME_TYPE_NONE = 0;
+  USERNAME_TYPE_FNAME = 1;
+  USERNAME_TYPE_ENS_L1 = 2;
+}
+
+message UserNameProof {
+  uint64 timestamp = 1;
+  bytes name = 2;
+  bytes owner = 3;
+  bytes signature = 4;
+  uint64 fid = 5;
+  UserNameType type = 6;
+}
+```
+
+A `UserNameProof` in a message `m` is valid only if it passes these validations:
+
+1. `timestamp` must be ≤ 10 mins ahead of current time
+2. `fid` must be the fid that is claiming ownership of the name
+
+If the type is `FNAME:`
+
+- `name` must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
+- `owner` must be the custody address of the fid.
+- `signature` must be a valid ECDSA signature on the EIP-712 Username Proof  message from the owner or the public key of the fname server, which is used for administrative actions.
+
+If the type is `ENS_L1` :
+
+- `name` must be a valid ENS name
+- name must be a valid, un-expired ENS name
+- name must end with `.eth`
+- The ens name must resolve to the `owner`
+- signature must be signed by the `owner`.
+- The domain must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
+- `owner` must be a valid eth address.
+- user must have a valid verification for `owner`
+- `signature` must be a valid EIP-712 Username Proof signature
+
+
 # 2. Message-Graph Specifications
 
 A message-graph is a data structure that allows state to be updated concurrently without requiring a central authority to resolve conflicts. It consists of a series of anonymous Δ-state CRDT's, each of which govern a data type and how it can be updated. The message-graph is idempotent but because of its dependency on state, it is not commutative or associative.
@@ -525,6 +572,19 @@ A conflict occurs if there are two messages with the same values for `m.data.fid
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
 
 The Link CRDT has a per-user size limit of 2500.
+
+### 2.1.7 UsernameProof CRDT
+
+The UsernameProof CRDT validates and accepts UsernameProof messages. The CRDT also ensures that a UsernameProof message `m` passes these validations:
+
+1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+
+A conflict occurs if two messages that have the same value for `m.name`. Conflicts are resolved with the following rules:
+
+1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
+2. If `m.data.timestamp` values are identical, discard the message with the lower fid
+
+The UsernameProof CRDT has a per-user size limit of 10.
 
 # 3. Hub Specifications
 
@@ -782,6 +842,10 @@ service HubService {
   rpc GetUserDataByFid(FidRequest) returns (MessagesResponse);
   rpc GetNameRegistryEvent(NameRegistryEventRequest) returns (NameRegistryEvent);
 
+  // User Name Proofs
+  rpc GetUserNameProof(UserNameProofRequest) returns (UserNameProof);
+  rpc GetUserNameProofsByFid(FidRequest) returns (UserNameProofsResponse);
+
   // Verifications
   rpc GetVerification(VerificationRequest) returns (Message);
   rpc GetVerificationsByFid(FidRequest) returns (MessagesResponse);
@@ -922,6 +986,14 @@ message IdRegistryEventRequest {
 
 message IdRegistryEventByAddressRequest {
   bytes address = 1;
+}
+
+message UserNameProofRequest {
+  bytes name = 1;
+}
+
+message UserNameProofsResponse {
+  repeated UserNameProof usernameProofs = 1;
 }
 ```
 
