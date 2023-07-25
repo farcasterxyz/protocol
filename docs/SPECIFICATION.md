@@ -218,7 +218,7 @@ enum UserDataType {
   USER_DATA_TYPE_DISPLAY = 2;  // Display Name
   USER_DATA_TYPE_BIO = 3;      // Bio
   USER_DATA_TYPE_URL = 5;      // Homepage URL
-  USER_DATA_TYPE_FNAME = 6;    // Preferred Fname
+  USER_DATA_TYPE_USERNAME = 6; // Preferred Fname
 }
 ```
 
@@ -231,7 +231,7 @@ A UserDataAddBody in a Message `m` is valid only if it passes these validations:
 5. If `m.data.body.type` is `USER_DATA_TYPE_DISPLAY`, value must be <= 32 bytes
 6. If `m.data.body.type` is `USER_DATA_TYPE_BIO`, value must be <= 256 bytes
 7. If `m.data.body.type` is `USER_DATA_TYPE_URL`, value must be <= 256 bytes
-8. If `m.data.body.type` is `USER_DATA_TYPE_FNAME`, value must map to a valid fname.
+8. If `m.data.body.type` is `USER_DATA_TYPE_USERNAME`, value must map to a valid fname.
 9. `m.data.body.value` must be a valid utf-8 string
 
 An fname is considered valid only if the most recent event for the fid `Transfer` event with the custody address in the `to` property. If a valid fname for a given fid becomes invalid, and there is a UserDataAdd message for that fid with the fname as its value, it must be revoked.
@@ -463,11 +463,10 @@ A UsernameProof message `m` of type `USERNAME_TYPE_ENS_L1` must also pass thes
 
 1. `m.data.body.name` name must:
    1. be a valid, unexpired ENS name
-   2. match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`
-   3. end in `.eth`
+   2. match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}\.eth$/`
 2. `m.data.body.owner` must:
-   1. be an address that the user has a valid VerificationMessage for.
-   2. be the owner of the ENS name.
+   1. be the custody address or an address that the fid has a valid VerificationMessage for.
+   2. be the address that the ENS names resolves to.
 3. `m.data.body.signature` must be a valid ECDSA signature on the EIP-712 Username Proof message from the owner of the ENS name.
 
 # 2. Message-Graph Specifications
