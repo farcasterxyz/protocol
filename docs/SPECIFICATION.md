@@ -188,7 +188,7 @@ message SignerRemoveBody {
 
 A SignerAdd or SignerRemove message `m` is only valid if it passes these validations:
 
-1. `m.data.body.signer` must by exactly 32 bytes.
+1. `m.data.body.signer` must be exactly 32 bytes.
 2. `m.signature_scheme` must be `SIGNATURE_SCHEME_EIP712`.
 3. `m.data.type` must be `MESSAGE_TYPE_USER_DATA_ADD`.
 4. `m.signer` must be an Ethereum address currently owning the fid `m.data.fid`.
@@ -237,7 +237,7 @@ An fname is considered valid only if the most recent event for the fid `Transfer
 
 A Cast is a public message created by a user that contains text or URIs to other resources.
 
-Casts may specify another cast as their parent, creating a threaded conversation. A thread has a root cast with no parent and reply casts whose parents are the root or its descendants. Each thread is an acyclic trees since a reply can only be created after its parent is hashed and signed.
+Casts may specify another cast as their parent, creating a threaded conversation. A thread has a root cast with no parent and reply casts whose parents are the root or its descendants. Each thread is an acyclic tree since a reply can only be created after its parent is hashed and signed.
 
 ```mermaid
 graph TB
@@ -463,7 +463,7 @@ The UserData CRDT validates and accepts UserDataAdd messages. The CRDT also ensu
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if two messages that have the same values for `m.data.fid` and `m.data.body.type`. Conflicts are resolved with the following rules:
+A conflict occurs if two messages have the same values for `m.data.fid` and `m.data.body.type`. Conflicts are resolved with the following rules:
 
 1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
 2. If `m.data.timestamp` values are identical, discard the message with the lower lexicographical order.
@@ -476,7 +476,7 @@ The Cast CRDT validates and accepts CastAdd and CastRemove messages. The CRDT al
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if there exist a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. Conflicts are resolved with the following rules:
+A conflict occurs if there exists a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. Conflicts are resolved with the following rules:
 
 2. If `m.data.type` is distinct, discard the CastAdd message.
 1. If `m.data.type` is identical and `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
