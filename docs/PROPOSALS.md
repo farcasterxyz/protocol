@@ -2,12 +2,17 @@
 
 Many design choices have nuances and tradeoffs that are difficult to express tersely in the protocol docs. Long form proposal documents are usually produced to discuss these decisions which cover such details. This section includes links to such proposals whose design decisions are relevant to the current protocol state.
 
+#### May 2023
+
+- [FIP-4: ENS Usernames](https://github.com/farcasterxyz/protocol/discussions/90)
+
 #### April 2023
 
 - [A Turing Complete Social Protocol](https://hackmd.io/3uAhr3bgRIOSlV8Nfv5mYA)
 - [Farcaster Wallets](https://hackmd.io/ObCWFizyQrivDp4cnzxlow)
 - [FIP-1: Canonical URIs](https://github.com/farcasterxyz/protocol/discussions/72)
 - [FIP-2: Arbitrary Targets](https://github.com/farcasterxyz/protocol/discussions/71)
+- [FIP-3: Links](https://github.com/farcasterxyz/protocol/discussions/85)
 
 #### March 2023
 

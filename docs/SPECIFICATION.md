@@ -2,14 +2,15 @@
 
 Requirements to implement a functional version of the Farcaster protocol.
 
-Version: `2023.5.31`
+Version: `2023.7.12`
 
 ## Table of Contents
 
 1. [Message Specifications](#1-message-specifications)
 2. [CRDT Specifications](#2-message-graph-specifications)
 3. [Hub Specifications](#3-hub-specifications)
-4. [Versioning](#4-versioning)
+4. [Fname Specifications](#4-fname-specifications)
+5. [Versioning](#5-versioning)
 
 # 1. Message Specifications
 
@@ -101,6 +102,7 @@ message MessageData {
     CastAddBody cast_add_body = 5;
     CastRemoveBody cast_remove_body = 6;
     ReactionBody reaction_body = 7;
+    UserNameProofBody proof_body = 8;
     VerificationAddEthAddressBody verification_add_eth_address_body = 9;
     VerificationRemoveBody verification_remove_body = 10;
     SignerAddBody signer_add_body = 11;
@@ -137,6 +139,7 @@ enum MessageType {
   MESSAGE_TYPE_SIGNER_ADD = 9;                   // Add a key pair that signs messages for a user
   MESSAGE_TYPE_SIGNER_REMOVE = 10;               // Remove a previously added key pair
   MESSAGE_TYPE_USER_DATA_ADD = 11;               // Add metadata about a user
+  MESSAGE_TYPE_USERNAME_PROOF = 12;              // Prove ownership of a username
 }
 ```
 
@@ -215,7 +218,7 @@ enum UserDataType {
   USER_DATA_TYPE_DISPLAY = 2;  // Display Name
   USER_DATA_TYPE_BIO = 3;      // Bio
   USER_DATA_TYPE_URL = 5;      // Homepage URL
-  USER_DATA_TYPE_FNAME = 6;    // Preferred Fname
+  USER_DATA_TYPE_USERNAME = 6; // Preferred Fname
 }
 ```
 
@@ -228,7 +231,7 @@ A UserDataAddBody in a Message `m` is valid only if it passes these validations:
 5. If `m.data.body.type` is `USER_DATA_TYPE_DISPLAY`, value must be <= 32 bytes
 6. If `m.data.body.type` is `USER_DATA_TYPE_BIO`, value must be <= 256 bytes
 7. If `m.data.body.type` is `USER_DATA_TYPE_URL`, value must be <= 256 bytes
-8. If `m.data.body.type` is `USER_DATA_TYPE_FNAME`, value must map to a valid fname.
+8. If `m.data.body.type` is `USER_DATA_TYPE_USERNAME`, value must map to a valid fname.
 9. `m.data.body.value` must be a valid utf-8 string
 
 An fname is considered valid only if the most recent event for the fid `Transfer` event with the custody address in the `to` property. If a valid fname for a given fid becomes invalid, and there is a UserDataAdd message for that fid with the fname as its value, it must be revoked.
@@ -424,6 +427,48 @@ A LinkRemove in a message `m` is valid only if it passes these validations:
 
 1.  `m.data.type` must be `MESSAGE_TYPE_LINK_REMOVE`
 
+## 1.7 Username Proof
+
+```protobuf
+enum UserNameType {
+  USERNAME_TYPE_NONE = 0;
+  USERNAME_TYPE_ENS_FNAME = 1;
+  USERNAME_TYPE_ENS_L1 = 2;
+}
+
+message UserNameProofBody {
+  uint64 timestamp = 1;
+  bytes name = 2;
+  bytes owner = 3;
+  bytes signature = 4;
+  uint64 fid = 5;
+  UserNameType type = 6;
+}
+```
+
+A UsernameProof message `m` must pass these validations:
+
+1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
+2. `m.data.body` must be `UserNameProofBody`.
+3. `m.data.body.timestamp` must be ≤ 10 mins ahead of current timestamp.
+4. `m.data.body.fid` must be a known fid.
+
+A UsernameProof message `m` of type `USERNAME_TYPE_ENS_FNAME` must also pass these validations:
+
+1. `m.data.body.name` name must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
+2. `m.data.body.owner` must be the custody address of the fid.
+3. `m.data.body.signature` must be a valid ECDSA signature on the EIP-712 Username Proof message from the owner or the public key of the fname server.
+
+A UsernameProof message `m` of type `USERNAME_TYPE_ENS_L1` must also pass these validations:
+
+1. `m.data.body.name` name must:
+   1. be a valid, unexpired ENS name
+   2. match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}\.eth$/`
+2. `m.data.body.owner` must:
+   1. be the custody address or an address that the fid has a valid VerificationMessage for.
+   2. be the address that the ENS names resolves to.
+3. `m.data.body.signature` must be a valid ECDSA signature on the EIP-712 Username Proof message from the owner of the ENS name.
+
 # 2. Message-Graph Specifications
 
 A message-graph is a data structure that allows state to be updated concurrently without requiring a central authority to resolve conflicts. It consists of a series of anonymous Δ-state CRDT's, each of which govern a data type and how it can be updated. The message-graph is idempotent but because of its dependency on state, it is not commutative or associative.
@@ -525,6 +570,19 @@ A conflict occurs if there are two messages with the same values for `m.data.fid
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
 
 The Link CRDT has a per-user size limit of 2500.
+
+### 2.1.8 UsernameProof CRDT
+
+The UsernameProof CRDT validates and accepts UsernameProof messages. It must also continuously re-validate ownership of the username by running a job at 2am UTC to verify ownership of all fnames and ENS Proofs. The CRDT also ensures that a UsernameProof message m passes these validations:
+
+1 `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+
+A conflict occurs if two messages that have the same value for `m.name`. Conflicts are resolved with the following rules:
+
+1. If m.data.timestamp values are distinct, discard the message with the lower timestamp.
+2. If m.data.timestamp values are identical, discard the message with the lower fid
+
+The UsernameProof CRDT has a per-user size limit of 10.
 
 # 3. Hub Specifications
 
@@ -793,6 +851,10 @@ service HubService {
   rpc GetIdRegistryEventByAddress(IdRegistryEventByAddressRequest) returns (IdRegistryEvent);
   rpc GetFids(FidsRequest) returns (FidsResponse);
 
+  // Username Proofs
+  rpc GetUserNameProof(UserNameProofRequest) returns (UserNameProof);
+  rpc GetUserNameProofsByFid(FidRequest) returns (UserNameProofsResponse);
+
   // Bulk Methods
   rpc GetAllCastMessagesByFid(FidRequest) returns (MessagesResponse);
   rpc GetAllReactionMessagesByFid(FidRequest) returns (MessagesResponse);
@@ -897,6 +959,14 @@ message LinksByTargetRequest {
   optional bool reverse = 5;
 }
 
+message UserNameProofRequest {
+  bytes name = 1;
+}
+
+message UserNameProofsResponse {
+  repeated UserNameProofBody usernameProofs = 1;
+}
+
 message UserDataRequest {
   uint64 fid = 1;
   UserDataType user_data_type = 2;
@@ -925,13 +995,115 @@ message IdRegistryEventByAddressRequest {
 }
 ```
 
-# 4. Versioning
+# 4. Fname Specifications
+
+### ENS CCIP Contract
+
+A CCIP [ENSIP-10](https://docs.ens.domains/ens-improvement-proposals/ensip-10-wildcard-resolution) contract will be deployed on L1 which resolves \*.fcast.id names to owner addresses. It stores the URL of the nameserver and validates signatures provided by the nameserver. This resolver will support addr record lookups only. The address of the contract is **\_\_** (to be filled on deployment).
+
+### **Name Server**
+
+The server which resolves `*.fcast.id` names lives at `fnames.facaster.xyz`. Fnames can be claimed by submitting an EIP-712 signed message that proves ownership of an fid that does not yet have an fname. The server also provides a method to transfer fnames to other fids by proving ownership of the fname.
+
+Usernames are also valid subdomains (e.g. [foo.fcast.id](http://foo.fcast.id) ) though they do not currently resolve to anything. A future upgrade to the nameserver may allow the owner to set a redirect record here. The following usernames are not available for registration, since they collide with existing subdomains — `www`, `fnames`
+
+**Managing Fname Ownership**
+
+A POST request to the `/transfers` endpoint can be made register, move or deregister a username. The request body must contain :
+
+```jsx
+{
+  "from": <fid>"                   // 0 for registering a new fname
+  "to": <fid>                      // 0 for unregistering an existing fname
+  "name": "<username>",            // fname
+  "timestamp": <current_timestamp> // Second resolution
+  "owner": "<address>"             // ETH custody address of the non-zero "from"/"to" fid as of timestamp
+  "signature": ""                  // hex EIP-712 signature signed by the "owner" address
+}
+```
+
+The request is rejected unless it meets the following criteria:
+
+1. The fname is owned by the “from” fid or is not owned by anyone.
+2. The “to” fid does not currently own a username.
+3. The name matches the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
+4. The timestamp is ≤ current time + 1 minute (for clock skew).
+5. The owner must be
+   1. the address that owns the “from” fid, if the “from” fid is not 0.
+   2. the address that owns the “to” fid, if the “from” fid is 0.
+   3. a privileged admin address
+6. The signature is a valid EIP-712 message from the “owner” which contains the name, timestamp and owner properties.
+7. If there exists an existing proof for the fid, the timestamp of this message must be `2419200` seconds (28 days) ahead of that timestamp to prevent abuse. i.e. an fid can only change their name once every 28 days
+
+The domain and types for the EIP-712 signature are described below:
+
+```jsx
+const domain = {
+  name: 'Farcaster name verification',
+  version: '1',
+  chainId: 1,
+  verifyingContract: '0xe3be01d99baa8db9905b33a3ca391238234b79d1', // name registry contract, will be the farcaster ENS CCIP contract later
+};
+
+const types = {
+  UserNameProof: [
+    { name: 'name', type: 'string' },
+    { name: 'timestamp', type: 'uint256' },
+    { name: 'owner', type: 'address' },
+  ],
+};
+```
+
+**Verifying Fname Ownership**
+
+Anyone can verify that a user requested verification of a name by making a call to the server. usrs can make a GET request to `/transfers` which returns a paginated list of events with the following schema:
+
+```jsx
+{
+	"transfers": [
+		{
+			"id": 1,
+			"from": 0,
+			"to": 1,
+		         "username": "test",
+		         "timestamp": 1686680932,
+		         "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			 // EIP-712 signature signed by the server's key
+			 "server_signature": "0x68a1a565f603b9966f228a38d918c12f166650749359fe41e2755fabe016026b361dd7d5f917c6f8a09241b29085fbaefffb75e443a3851be85c8b53b",
+			 // Original user provided signature
+			 "user_signature": "0xf603b9966f228a38d918c12f166650749359fe41e2755fabe016026b361dd7d5f917c6f8a09241b29085fbaefffb75e443a3851be85c8b53b691536d1c",
+		},
+		// ...
+	]
+}
+```
+
+Results can be filtered with these query string parameters:
+
+```jsx
+from_id=<id>        // minimum id
+from_ts=<timestamp> // minumum timestamp
+fid=<fid>           // filter events by a particular fid
+name=<username>     // filter events for a particular name
+```
+
+**Nameserver Keypair**
+
+The nameserver maintains its own ECDSA keypair to counter-sign messages or perform administrative actions. The `server_signature` will be signed by this key. The public key used to perform these signers can be fetched by performing a GET on `/signer` which returns:
+
+```jsx
+{
+	"address": "<addr>" // Public address for the server's signer
+}
+```
+
+# 5. Versioning
 
 Farcaster is a long-lived protocol built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers.
 
 The protocol specification is date versioned with a non-zero leading `YYYY.MM.DD` format like `2021.3.1`. A new version of the protocol specification must be released every 6 weeks. Hot-fix releases are permitted in-between regular if necessary.
 
-## 4.1 Upgrade Process
+## 5.1 Upgrade Process
 
 Hubs implement a specific version of the protocol, which is advertised in their `HubInfoResponse`.
 
