@@ -2,22 +2,22 @@
 
 ![Archway](/images/arch512.png)
 
-Farcaster is a protocol for decentralized social applications.
-
 ## Getting Started
 
-1. Start using Farcaster with one of many [Farcaster Apps](https://www.farcaster.xyz/apps).
-2. Learn how Farcaster works by watching the [protocol overview series](https://www.farcaster.xyz/protocol).
-3. Create your own apps by following tutorials in the [developer portal](https://www.farcaster.xyz/devs).
+Farcaster is a protocol for building decentralized social apps. This repository contains the technical specification for implementing Farcaster. 
+
+If you are instead looking for: 
+
+1. How to get started, check out [farcaster.xyz](https://www.farcaster.xyz).
+2. Developer documentation, check out [docs.farcaster.xyz](https://docs.farcaster.xyz).
 
 ## Specifications
 
-This repository lays out the technical specification for implementing Farcaster. It is divided into four sections:
+The specification is maintained as a Markdown file. There are three important sections:
 
 1. [Overview](/hub/README.md) - A high level overview of the protocol.
-2. [Proposals](/hub/README.md) - A list of proposals to improve the protocol.
-3. [Hub Specification](/hub/README.md) - The technical specification for implementing a Farcaster Hub.
-4. [Governance](/hub/README.md) - An overview of how the protocol is governed.
+2. [Specification](/hub/README.md) - The technical spec for implementing Farcaster.
+3. [FIP Discussions](https://github.com/farcasterxyz/protocol/discussionsd) - A forum where new proposals to change the specification are discussed.
 
 ## Contributing
 
