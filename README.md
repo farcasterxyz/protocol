@@ -15,9 +15,9 @@ If you are instead looking for:
 
 The specification is maintained as a Markdown file. There are three important sections:
 
-1. [Overview](/hub/README.md) - A high level overview of the protocol.
-2. [Specification](/hub/README.md) - The technical spec for implementing Farcaster.
-3. [FIP Discussions](https://github.com/farcasterxyz/protocol/discussionsd) - A forum where new proposals to change the specification are discussed.
+1. [Overview](/docs/README.md) - A high level overview of the protocol.
+2. [Specification](/docs/README.md) - The technical spec for implementing Farcaster.
+3. [FIP Discussions](https://github.com/farcasterxyz/protocol/discussions) - A forum where new proposals to change the specification are discussed.
 
 ## Contributing
 
