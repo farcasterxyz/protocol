@@ -18,16 +18,19 @@ Version: `2023.10.4`
 There are a set of 3 contracts that keep track of account ids (fids), keys for the fids and the storage allocated to the fids.
 
 ## 1.1 Id Registry
+
 The Id registry contract keeps track of the fids and their custody addresses. It is a simple mapping of fid to custody address. An fid is only valid if it is present in the Id registry.
 
 The [canonical Id registry contract](https://optimistic.etherscan.io/address/0x00000000fcaf86937e41ba038b4fa40baa4b780a) is deployed at `0x00000000fcaf86937e41ba038b4fa40baa4b780a` on Optimism.
 
 ## 1.2 Key Registry
+
 The Key registry contract keeps track of valid signing keys for the fids. A signer for an fid is only valid if it is present in the Key registry for that particular fid. Only the custody address of the fid may add or remove signers for that fid.
 
 The [canonical Key registry contract](https://optimistic.etherscan.io/address/0x00000000fc9e66f1c6d86d750b4af47ff0cc343d) is deployed at `0x00000000fc9e66f1c6d86d750b4af47ff0cc343d` on Optimism.
 
 ## 1.3 Storage Registry
+
 The Storage registry contract keeps track of the storage allocated to each fid. The storage for an fid is denominated in integer units. Each CRDT specifies the number of messages it can store per unit.
 
 The [canonical Storage registry contract](https://optimistic.etherscan.io/address/0x00000000fcce7f938e7ae6d3c335bd6a1a7c593d) is deployed at `0x00000000fcce7f938e7ae6d3c335bd6a1a7c593d` on Optimism.
@@ -195,7 +198,7 @@ graph TD
     SignerA1 -->  CastD[Reaction]
 ```
 
-A Signer is added or removed by registering the public key of the signer to an fid with a smart contract at a well known address. Signers can only be added for the fid owned by the caller of the contract. 
+A Signer is added or removed by registering the public key of the signer to an fid with a smart contract at a well known address. Signers can only be added for the fid owned by the caller of the contract.
 
 ## 2.3 User Data
 
@@ -396,7 +399,7 @@ A VerificationAddEthAddressBody or VerificationRemoveBody in a message `m` is va
 
 ## 2.6 Links
 
-A Link is a relationship between two users which can be one of several types. Links are added with a `LinkAdd` message and removed with a  `LinkRemove` message which shares a common body structure.
+A Link is a relationship between two users which can be one of several types. Links are added with a `LinkAdd` message and removed with a `LinkRemove` message which shares a common body structure.
 
 ```protobuf
 message LinkBody {
