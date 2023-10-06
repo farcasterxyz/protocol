@@ -373,13 +373,15 @@ struct VerificationClaim {
 }
 ```
 
-An [EIP-712](https://eips.ethereum.org/EIPS/eip-712) signature is requested from the Ethereum address using the Farcaster domain separator. A Verification is then added by constructing a `VerificationAdd` message which includes the signature and can be removed with a `VerificationRemove` message.
+An [EIP-712](https://eips.ethereum.org/EIPS/eip-712) signature is requested from the Ethereum address using the Farcaster domain separator. Smart contract signatures must include `chainId` in the domain separator. A Verification is then added by constructing a `VerificationAdd` message which includes the signature and can be removed with a `VerificationRemove` message.
 
 ```protobuf
 message VerificationAddEthAddressBody {
-  bytes address = 1;        // Ethereum address being verified
-  bytes eth_signature = 2;  // Signature produced by the user's Ethereum address
-  bytes block_hash = 3;     // Hash of the latest Ethereum block when the signature was produced
+  bytes address = 1;            // Ethereum address being verified
+  bytes eth_signature = 2;      // Signature produced by the user's Ethereum address
+  bytes block_hash = 3;         // Hash of the latest Ethereum block when the signature was produced
+  uint32 verification_type = 4; // Verification type ID, EOA or contract
+  uint32 chain_id = 5;          // Chain ID of the verification claim, for contract verifications
 }
 
 message VerificationRemoveBody {
@@ -394,8 +396,14 @@ A VerificationAddEthAddressBody or VerificationRemoveBody in a message `m` is va
 3. `m.data.body` must be `VerificationAddEthAddressBody` if `m.data.type` was `MESSAGE_TYPE_VERIFICATION_ADD_ETH_ADDRESS`.
 4. `m.data.body` must be `VerificationRemoveBody` if `m.data.type` was `MESSAGE_TYPE_VERIFICATION_REMOVE`.
 5. `m.data.body.address` must be exactly 20 bytes long.
-6. `m.data.body.eth_signature` must be a valid EIP-712 signature of the VerificationClaim (VerificationAdd only)
-7. `m.data.body.block_hash` must be exactly 32 bytes long (VerificationAdd only)
+6. `m.data.body.eth_signature` must be <= 256 bytes.
+7. `m.data.body.eth_signature` must be a valid EIP-712 signature of the VerificationClaim (VerificationAdd only)
+8. `m.data.body.block_hash` must be exactly 32 bytes long (VerificationAdd only)
+9. `m.data.body.verification_type` must be `0` or `1`.
+10. If `m.data.body.verification_type` is `0`:
+    a. `m.data.body.chain_id` must be `0`.
+11. If `m.data.body.verification_type` is `1`:
+    a. `m.data.body.chain_id` must be `1` or `10`.
 
 ## 1.6 Links
 
