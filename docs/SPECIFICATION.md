@@ -234,7 +234,7 @@ A UserDataAddBody in a Message `m` is valid only if it passes these validations:
 8. If `m.data.body.type` is `USER_DATA_TYPE_USERNAME`, value must map to a valid fname.
 9. `m.data.body.value` must be a valid utf-8 string
 
-A username is considered valid only if the most recent event for the fid `Transfer` event with the custody address in the `to` property. If a valid fname for a given fid becomes invalid, and there is a UserDataAdd message for that fid with the fname as its value, it must be revoked.
+A username is considered valid only if the most recent event for the fid `Transfer` event with the custody address in the `to` property. If a valid username for a given fid becomes invalid, and there is a UserDataAdd message for that fid with the fname as its value, it must be revoked. The underlying username proofs are checked once per day to determine if they are still valid.
 
 ## 2.4 Casts
 
@@ -477,7 +477,7 @@ A message-graph is a data structure that allows state to be updated concurrently
 
 A CRDT must accept a message only if it passes the message validation rules described above. CRDTs may also implement additional validation rules that depend on the state of other CRDTs or the blockchain. CRDTs must also specify their own rules to detect conflicts between valid messages and have a mechanism to resolve conflicts. All CRDTs implement a form of last-write-wins using the total message ordering, and some CRDTs also add remove-wins rules.
 
-CRDTs also prune messages when they reach a certain size per user to prevent them from growing indefinitely. The sizes are measured in units per user. The number of units of storage a user has is determined by the Storage registry. When adding a message crosses the size limit, the message in the CRDT with the lowest timestamp-hash order is pruned. Pruning should be performed once every hour on the hour in UTC to minimize sync thrash between Hubs.
+CRDTs also prune messages when they reach a certain size per user to prevent them from growing indefinitely. The sizes are measured in units per user. The number of units of storage a user has is determined by the Storage registry. When adding a message crosses the size limit, the message in the CRDT with the lowest timestamp-hash order is pruned. Pruning should be performed once every hour on the hour in UTC to minimize sync thrash between Hubs. If all storage units expire for a user, there is a 30 day grace period before hubs will prune all messages for the user.
 
 ### 3.1.1 General Rules
 
@@ -757,11 +757,15 @@ Hubs must implement the following [gRPC](https://grpc.io/) endpoints to enable d
 
 ```protobuf
 service HubService {
-  rpc GetInfo(Empty) returns (HubInfoResponse);
+  rpc GetInfo(HubInfoRequest) returns (HubInfoResponse);
   rpc GetAllSyncIdsByPrefix(TrieNodePrefix) returns (SyncIds);
   rpc GetAllMessagesBySyncIds(SyncIds) returns (MessagesResponse);
   rpc GetSyncMetadataByPrefix(TrieNodePrefix) returns (TrieNodeMetadataResponse);
   rpc GetSyncSnapshotByPrefix(TrieNodePrefix) returns (TrieNodeSnapshotResponse);
+}
+
+message HubInfoRequest {
+   bool db_stats = 1;
 }
 
 message HubInfoResponse {
@@ -826,18 +830,19 @@ service HubService {
   // User Data
   rpc GetUserData(UserDataRequest) returns (Message);
   rpc GetUserDataByFid(FidRequest) returns (MessagesResponse);
-  rpc GetNameRegistryEvent(NameRegistryEventRequest) returns (NameRegistryEvent);
 
   // Verifications
   rpc GetVerification(VerificationRequest) returns (Message);
   rpc GetVerificationsByFid(FidRequest) returns (MessagesResponse);
 
-  // Signer
-  rpc GetSigner(SignerRequest) returns (Message);
-  rpc GetSignersByFid(FidRequest) returns (MessagesResponse);
-  rpc GetIdRegistryEvent(IdRegistryEventRequest) returns (IdRegistryEvent);
-  rpc GetIdRegistryEventByAddress(IdRegistryEventByAddressRequest) returns (IdRegistryEvent);
-  rpc GetFids(FidsRequest) returns (FidsResponse);
+   // OnChain Events
+   rpc GetOnChainSigner(SignerRequest) returns (OnChainEvent);
+   rpc GetOnChainSignersByFid(FidRequest) returns (OnChainEventResponse);
+   rpc GetOnChainEvents(OnChainEventRequest) returns (OnChainEventResponse);
+   rpc GetIdRegistryOnChainEvent(FidRequest) returns (OnChainEvent);
+   rpc GetIdRegistryOnChainEventByAddress(IdRegistryEventByAddressRequest) returns (OnChainEvent);
+   rpc GetCurrentStorageLimitsByFid(FidRequest) returns (StorageLimitsResponse);  rpc GetFids(FidsRequest) returns (FidsResponse);
+   rpc GetFids(FidsRequest) returns (FidsResponse);
 
   // Username Proofs
   rpc GetUserNameProof(UserNameProofRequest) returns (UserNameProof);
@@ -960,10 +965,6 @@ message UserDataRequest {
   UserDataType user_data_type = 2;
 }
 
-message NameRegistryEventRequest {
-  bytes name = 1;
-}
-
 message VerificationRequest {
   uint64 fid = 1;
   bytes address = 2;
@@ -974,12 +975,101 @@ message SignerRequest {
   bytes signer = 2;
 }
 
-message IdRegistryEventRequest {
-  uint64 fid = 1;
+enum OnChainEventType {
+   EVENT_TYPE_NONE = 0;
+   EVENT_TYPE_SIGNER = 1;
+   EVENT_TYPE_SIGNER_MIGRATED = 2;
+   EVENT_TYPE_ID_REGISTER = 3;
+   EVENT_TYPE_STORAGE_RENT = 4;
 }
 
-message IdRegistryEventByAddressRequest {
-  bytes address = 1;
+message OnChainEvent {
+   OnChainEventType type = 1;
+   uint32 chain_id = 2;
+   uint32 block_number = 3;
+   bytes block_hash = 4;
+   uint64 block_timestamp = 5;
+   bytes transaction_hash = 6;
+   uint32 log_index = 7;
+   uint64 fid = 8;
+   oneof body {
+      SignerEventBody signer_event_body = 9;
+      SignerMigratedEventBody signer_migrated_event_body = 10;
+      IdRegisterEventBody id_register_event_body = 11;
+      StorageRentEventBody storage_rent_event_body = 12;
+   }
+   uint32 tx_index = 13;
+}
+
+enum SignerEventType {
+   SIGNER_EVENT_TYPE_NONE = 0;
+   SIGNER_EVENT_TYPE_ADD = 1;
+   SIGNER_EVENT_TYPE_REMOVE = 2;
+   SIGNER_EVENT_TYPE_ADMIN_RESET = 3;
+}
+
+message SignerEventBody {
+   bytes key = 1;
+   uint32 key_type = 2;
+   SignerEventType event_type = 3;
+   bytes metadata = 4;
+   uint32 metadata_type = 5;
+}
+
+message SignerMigratedEventBody {
+   uint32 migratedAt = 1;
+}
+
+enum IdRegisterEventType {
+   ID_REGISTER_EVENT_TYPE_NONE = 0;
+   ID_REGISTER_EVENT_TYPE_REGISTER = 1;
+   ID_REGISTER_EVENT_TYPE_TRANSFER = 2;
+   ID_REGISTER_EVENT_TYPE_CHANGE_RECOVERY = 3;
+}
+
+message IdRegisterEventBody {
+   bytes to = 1;
+   IdRegisterEventType event_type = 2;
+   bytes from = 3;
+   bytes recovery_address = 4;
+}
+
+message StorageRentEventBody {
+   bytes payer = 1;
+   uint32 units = 2;
+   uint32 expiry = 3;
+}
+
+message OnChainEventRequest {
+   uint64 fid = 1;
+   OnChainEventType event_type = 2;
+   optional uint32 page_size = 3;
+   optional bytes page_token = 4;
+   optional bool reverse = 5;
+}
+
+message OnChainEventResponse {
+   repeated OnChainEvent events = 1;
+   optional bytes next_page_token = 2;
+}
+
+message StorageLimitsResponse {
+   repeated StorageLimit limits = 1;
+}
+
+enum StoreType {
+   STORE_TYPE_NONE = 0;
+   STORE_TYPE_CASTS = 1;
+   STORE_TYPE_LINKS = 2;
+   STORE_TYPE_REACTIONS = 3;
+   STORE_TYPE_USER_DATA = 4;
+   STORE_TYPE_VERIFICATIONS = 5;
+   STORE_TYPE_USERNAME_PROOFS = 6;
+}
+
+message StorageLimit {
+   StoreType store_type = 1;
+   uint64 limit = 2;
 }
 ```
 
