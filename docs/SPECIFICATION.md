@@ -2,17 +2,42 @@
 
 Requirements to implement a functional version of the Farcaster protocol.
 
-Version: `2023.8.23`
+Version: `2023.10.4`
 
 ## Table of Contents
 
-1. [Message Specifications](#1-message-specifications)
-2. [CRDT Specifications](#2-message-graph-specifications)
-3. [Hub Specifications](#3-hub-specifications)
-4. [Fname Specifications](#4-fname-specifications)
-5. [Versioning](#5-versioning)
+1. [Contracts](#1-contracts)
+2. [Message Specifications](#1-message-specifications)
+3. [CRDT Specifications](#2-message-graph-specifications)
+4. [Hub Specifications](#3-hub-specifications)
+5. [Fname Specifications](#4-fname-specifications)
+6. [Versioning](#5-versioning)
 
-# 1. Message Specifications
+# 1. Smart Contracts
+
+There are a set of 3 contracts that keep track of account ids (fids), keys for the fids and the storage allocated to the fids.
+
+## 1.1 Id Registry
+
+The Id registry contract keeps track of the fids and their custody addresses. It is a simple mapping of fid to custody address. An fid is only valid if it is present in the Id registry.
+
+The [canonical Id registry contract](https://optimistic.etherscan.io/address/0x00000000fcaf86937e41ba038b4fa40baa4b780a) is deployed at `0x00000000fcaf86937e41ba038b4fa40baa4b780a` on Optimism.
+
+## 1.2 Key Registry
+
+The Key registry contract keeps track of valid signing keys for the fids. A signer for an fid is only valid if it is present in the Key registry for that particular fid. Only the custody address of the fid may add or remove signers for that fid.
+
+The [canonical Key registry contract](https://optimistic.etherscan.io/address/0x00000000fc9e66f1c6d86d750b4af47ff0cc343d) is deployed at `0x00000000fc9e66f1c6d86d750b4af47ff0cc343d` on Optimism.
+
+## 1.3 Storage Registry
+
+The Storage registry contract keeps track of the storage allocated to each fid. The storage for an fid is denominated in integer units. Each CRDT specifies the number of messages it can store per unit.
+
+The [canonical Storage registry contract](https://optimistic.etherscan.io/address/0x00000000fcce7f938e7ae6d3c335bd6a1a7c593d) is deployed at `0x00000000fcce7f938e7ae6d3c335bd6a1a7c593d` on Optimism.
+
+For a message to be accepted, the fid must be registered in the Id registry, and signed with a valid signer present the Key registry, and the fid must have enough storage allocated in the Storage registry.
+
+# 2. Message Specifications
 
 A Message is a cryptographically signed binary data object that represents a delta-operation on the Farcaster network.
 
@@ -86,7 +111,7 @@ Messages are totally ordered by timestamp and hash. Assume two messages $m$ and 
 
 A pariwise comparison of two distinct hashes $x$ and $y$ is performed by comparing the ASCII values of the characters in $x$ and $y$ in order. The hash which has a higher ASCII character value for a distinct pair has the highest order.
 
-## 1.1 Message Data
+## 2.1 Message Data
 
 A MessageData contains the payload of the Message, which is hashed and signed to produce the message.
 
@@ -105,10 +130,9 @@ message MessageData {
     UserNameProofBody proof_body = 8;
     VerificationAddEthAddressBody verification_add_eth_address_body = 9;
     VerificationRemoveBody verification_remove_body = 10;
-    SignerAddBody signer_add_body = 11;
     UserDataBody user_data_body = 12;
-    SignerRemoveBody signer_remove_body = 13;
     LinkBody link_body = 14;
+    UserNameProof username_proof_body = 15;
   }
 }
 ```
@@ -136,8 +160,6 @@ enum MessageType {
   MESSAGE_TYPE_LINK_REMOVE = 6;                  // Remove an existing Link
   MESSAGE_TYPE_VERIFICATION_ADD_ETH_ADDRESS = 7; // Add an Ethereum Address Verification
   MESSAGE_TYPE_VERIFICATION_REMOVE = 8;          // Remove a previously added Verification
-  MESSAGE_TYPE_SIGNER_ADD = 9;                   // Add a key pair that signs messages for a user
-  MESSAGE_TYPE_SIGNER_REMOVE = 10;               // Remove a previously added key pair
   MESSAGE_TYPE_USER_DATA_ADD = 11;               // Add metadata about a user
   MESSAGE_TYPE_USERNAME_PROOF = 12;              // Prove ownership of a username
 }
@@ -160,7 +182,7 @@ enum FarcasterNetwork {
 }
 ```
 
-## 1.2 Signers
+## 2.2 Signers
 
 A _Signer_ is an Ed25519[^ed25519] key pair that applications can use to authorize messages.
 
@@ -176,31 +198,9 @@ graph TD
     SignerA1 -->  CastD[Reaction]
 ```
 
-A Signer is added or removed with `SignerAdd` and `SignerRemove` messages that must contain the public key of the Signer. Signer messages must be signed by the custody address of the fid. A `SignerAdd` message may contain a human-readable label for identification purposes.
+A Signer is added or removed by registering the public key of the signer to an fid with a smart contract at a well known address. Signers can only be added for the fid owned by the caller of the contract.
 
-```protobuf
-message SignerAddBody {
-  bytes signer = 1;         // Ed25519 public key
-  optional string name = 2; // Optional human-readable label
-}
-
-message SignerRemoveBody {
-  bytes signer = 1;         // Ed25519 public key
-}
-```
-
-A SignerAdd or SignerRemove message `m` is only valid if it passes these validations:
-
-1. `m.data.body.signer` must be exactly 32 bytes.
-2. `m.signature_scheme` must be `SIGNATURE_SCHEME_EIP712`.
-3. `m.data.type` must be `MESSAGE_TYPE_USER_DATA_ADD`.
-4. `m.signer` must be an Ethereum address currently owning the fid `m.data.fid`.
-
-A SignerAdd message `m` must additionally pass these validations:
-
-1. `m.data.body.name` must be a UTF-8 string less than 32 bytes long
-
-## 1.3 User Data
+## 2.3 User Data
 
 A UserData message contains metadata about a user like their display name or profile picture.
 
@@ -218,7 +218,7 @@ enum UserDataType {
   USER_DATA_TYPE_DISPLAY = 2;  // Display Name
   USER_DATA_TYPE_BIO = 3;      // Bio
   USER_DATA_TYPE_URL = 5;      // Homepage URL
-  USER_DATA_TYPE_USERNAME = 6; // Preferred Fname
+  USER_DATA_TYPE_USERNAME = 6; // Preferred username
 }
 ```
 
@@ -234,9 +234,9 @@ A UserDataAddBody in a Message `m` is valid only if it passes these validations:
 8. If `m.data.body.type` is `USER_DATA_TYPE_USERNAME`, value must map to a valid fname.
 9. `m.data.body.value` must be a valid utf-8 string
 
-An fname is considered valid only if the most recent event for the fid `Transfer` event with the custody address in the `to` property. If a valid fname for a given fid becomes invalid, and there is a UserDataAdd message for that fid with the fname as its value, it must be revoked.
+A username is considered valid only if the most recent event for the fid `Transfer` event with the custody address in the `to` property. If a valid username for a given fid becomes invalid, and there is a UserDataAdd message for that fid with the fname as its value, it must be revoked. The underlying username proofs are checked once per day to determine if they are still valid.
 
-## 1.4 Casts
+## 2.4 Casts
 
 A Cast is a public message created by a user that contains text or URIs to other resources.
 
@@ -358,7 +358,7 @@ A ReactionRemove in a message `m` is valid only if it passes these validations:
 
 1. `m.data.type` must be `MESSAGE_TYPE_REACTION_REMOVE`
 
-## 1.5 Verifications
+## 2.5 Verifications
 
 A Verification is a cryptographic proof of ownership of an Ethereum address.
 
@@ -397,9 +397,9 @@ A VerificationAddEthAddressBody or VerificationRemoveBody in a message `m` is va
 6. `m.data.body.eth_signature` must be a valid EIP-712 signature of the VerificationClaim (VerificationAdd only)
 7. `m.data.body.block_hash` must be exactly 32 bytes long (VerificationAdd only)
 
-## 1.6 Links
+## 2.6 Links
 
-A Link is a relationship between two users which can be one of several types. Links are added with a `LinkAdd` message and removed with a  `LinkRemove` message which shares a common body structure.
+A Link is a relationship between two users which can be one of several types. Links are added with a `LinkAdd` message and removed with a `LinkRemove` message which shares a common body structure.
 
 ```protobuf
 message LinkBody {
@@ -411,21 +411,21 @@ message LinkBody {
 }
 ```
 
-A Link message `m` must pass these validations and the validations for LinkAdd or LinkRemove:
+A Link message `m` must pass these validations and the validations for LinkAdd or LinkRemove:
 
-1.  `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
-2.  `m.data.body` must be `LinkBody`.
-3.  `m.data.body.type` must be ≤ 8 bytes.
-4.  `m.data.body.target` must be a known fid.
-5.  `m.data.body.displayTimestamp` must be ≤ `m.data.timestamp`
+1.  `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
+2.  `m.data.body` must be `LinkBody`.
+3.  `m.data.body.type` must be ≤ 8 bytes.
+4.  `m.data.body.target` must be a known fid.
+5.  `m.data.body.displayTimestamp` must be ≤ `m.data.timestamp`
 
-A LinkAdd message `m` is valid only if it passes these validations:
+A LinkAdd message `m` is valid only if it passes these validations:
 
-1.  `m.data.type` must be `MESSAGE_TYPE_LINK_ADD`
+1.  `m.data.type` must be `MESSAGE_TYPE_LINK_ADD`
 
-A LinkRemove in a message `m` is valid only if it passes these validations:
+A LinkRemove in a message `m` is valid only if it passes these validations:
 
-1.  `m.data.type` must be `MESSAGE_TYPE_LINK_REMOVE`
+1.  `m.data.type` must be `MESSAGE_TYPE_LINK_REMOVE`
 
 ## 1.7 Username Proof
 
@@ -446,20 +446,20 @@ message UserNameProofBody {
 }
 ```
 
-A UsernameProof message `m` must pass these validations:
+A UsernameProof message `m` must pass these validations:
 
-1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
-2. `m.data.body` must be `UserNameProofBody`.
-3. `m.data.body.timestamp` must be ≤ 10 mins ahead of current timestamp.
-4. `m.data.body.fid` must be a known fid.
+1. `m.signature_scheme` must be `SIGNATURE_SCHEME_ED25519`.
+2. `m.data.body` must be `UserNameProofBody`.
+3. `m.data.body.timestamp` must be ≤ 10 mins ahead of current timestamp.
+4. `m.data.body.fid` must be a known fid.
 
-A UsernameProof message `m` of type `USERNAME_TYPE_ENS_FNAME` must also pass these validations:
+A UsernameProof message `m` of type `USERNAME_TYPE_ENS_FNAME` must also pass these validations:
 
 1. `m.data.body.name` name must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
 2. `m.data.body.owner` must be the custody address of the fid.
 3. `m.data.body.signature` must be a valid ECDSA signature on the EIP-712 Username Proof message from the owner or the public key of the fname server.
 
-A UsernameProof message `m` of type `USERNAME_TYPE_ENS_L1` must also pass these validations:
+A UsernameProof message `m` of type `USERNAME_TYPE_ENS_L1` must also pass these validations:
 
 1. `m.data.body.name` name must:
    1. be a valid, unexpired ENS name
@@ -469,40 +469,29 @@ A UsernameProof message `m` of type `USERNAME_TYPE_ENS_L1` must also pass thes
    2. be the address that the ENS names resolves to.
 3. `m.data.body.signature` must be a valid ECDSA signature on the EIP-712 Username Proof message from the owner of the ENS name.
 
-# 2. Message-Graph Specifications
+# 3. Message-Graph Specifications
 
 A message-graph is a data structure that allows state to be updated concurrently without requiring a central authority to resolve conflicts. It consists of a series of anonymous Δ-state CRDT's, each of which govern a data type and how it can be updated. The message-graph is idempotent but because of its dependency on state, it is not commutative or associative.
 
-## 2.1 CRDTs
+## 3.1 CRDTs
 
 A CRDT must accept a message only if it passes the message validation rules described above. CRDTs may also implement additional validation rules that depend on the state of other CRDTs or the blockchain. CRDTs must also specify their own rules to detect conflicts between valid messages and have a mechanism to resolve conflicts. All CRDTs implement a form of last-write-wins using the total message ordering, and some CRDTs also add remove-wins rules.
 
-CRDTs also prune messages when they reach a certain age or size per user to prevent them from growing indefinitely. When adding a message crosses the size limit, the message in the CRDT with the lowest timestamp-hash order is pruned. When a message is older than the age limit specified as X seconds ago, it must also be pruned. Pruning should be performed once every hour on the hour in UTC to minimize sync thrash between Hubs.
+CRDTs also prune messages when they reach a certain size per user to prevent them from growing indefinitely. The sizes are measured in units per user. The number of units of storage a user has is determined by the Storage registry. When adding a message crosses the size limit, the message in the CRDT with the lowest timestamp-hash order is pruned. Pruning should be performed once every hour on the hour in UTC to minimize sync thrash between Hubs. If all storage units expire for a user, there is a 30 day grace period before hubs will prune all messages for the user.
 
-### 2.1.1 General Rules
+### 3.1.1 General Rules
 
 All CRDTs must implement the following rules for validating messages:
 
 1. Messages with an EIP-712 signature scheme are only valid if the signing Ethereum address is the owner of the fid.
-2. Messages with an ED25519 signature scheme are only valid if the signing key pair is a Signer whose `SignerAdd` message is currently in the Signer CRDT's add-set.
+2. Messages with an ED25519 signature scheme are only valid if the signing key pair is a Signer is present in the Key registry for the fid and has never been removed.
 3. Messages are only valid if the fid is owned by the custody address that signed the message, or the signer of the message, which is specified by the Id Registry.
 
 External actions on blockchains or in other CRDTs can cause messages to become invalid. Such actions must cause an immediate revocation of messages which are discarded from CRDTs, according to the following rules:
 
-1. If an fid is transferred out of an Ethereum address, all Signer messages for that fid signed by that address must be revoked.
-2. When a SignerAdd is removed with a SignerRemove or is pruned, all messages signed by the signer in other CRDTs should be revoked.
+1. When a Signer is removed for an fid from the Key registry, all messages signed by the signer in other CRDTs should be revoked.
 
-### 2.1.2 Signer CRDT
-
-The Signer CRDT validates and accepts SignerAdd and SignerRemove messages. A conflict occurs if two messages have the same values for `m.data.fid` and `m.data.body.signer`. Conflicts are resolved with the following rules:
-
-1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
-2. If `m.data.timestamp` values are identical, and `m.data.type` is distinct, discard the `SignerAdd` message.
-3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lower lexicographical order.
-
-The Signer CRDT has a per-user size limit of 1000.
-
-### 2.1.3 UserData CRDT
+### 3.1.2 UserData CRDT
 
 The UserData CRDT validates and accepts UserDataAdd messages. The CRDT also ensures that a UserDataAdd message `m` passes these validations:
 
@@ -513,9 +502,9 @@ A conflict occurs if two messages have the same values for `m.data.fid` and `m.d
 1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
 2. If `m.data.timestamp` values are identical, discard the message with the lower lexicographical order.
 
-The UserData CRDT has a per-user size limit of 100, even though this is practically unreachable with the current schema.
+The UserData CRDT has a per-unit size limit of 50, even though this is practically unreachable with the current schema.
 
-### 2.1.4 Cast CRDT
+### 3.1.3 Cast CRDT
 
 The Cast CRDT validates and accepts CastAdd and CastRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
@@ -527,9 +516,9 @@ A conflict occurs if there exists a CastAdd Message and a CastRemove message who
 1. If `m.data.type` is identical and `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
 1. If `m.data.timestamp` and `m.data.type` values are identical, discard the message with the lower lexicographical order.
 
-The Cast CRDT has a per-user size limit of 10,000 and an age limit of 31,536,000 or approximately 1 year.
+The Cast CRDT has a per-unit size limit of 5,000.
 
-### 2.1.5 Reaction CRDT
+### 3.1.4 Reaction CRDT
 
 The Reaction CRDT validates and accepts ReactionAdd and ReactionRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
@@ -541,23 +530,23 @@ A conflict occurs if two messages have the same values for `m.data.fid`, `m.data
 2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the ReactionAdd message.
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
 
-The Reaction CRDT has a per-user size limit of 5,000 and an age limit of 7,776,000 or approximately 90 days.
+The Reaction CRDT has a per-unit size limit of 2,500.
 
-### 2.1.6 Verification CRDT
+### 3.1.5 Verification CRDT
 
 The Verification CRDT validates and accepts VerificationAddEthereumAddress and VerificationRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
 1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
-A conflict occurs if there are two messages with the same values for `m.data.fid`, `m.data.body.address`. Conflicts are resolved with the following rules:
+A conflict occurs if there are two messages with the same value for `m.data.body.address`. Conflicts are resolved with the following rules:
 
 1. If `m.data.timestamp` is distinct, discard the message with the lower timestamp.
 2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the VerificationAdd message.
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
 
-The Verification CRDT has a per-user size limit of 50.
+The Verification CRDT has a per-unit size limit of 25.
 
-### 2.1.7 Link CRDT
+### 3.1.6 Link CRDT
 
 The Link CRDT validates and accepts LinkAdd and LinkRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
@@ -569,9 +558,9 @@ A conflict occurs if there are two messages with the same values for `m.data.fid
 2. If `m.data.timestamp` is identical and `m.data.type` is distinct, discard the LinkAdd message.
 3. If `m.data.timestamp` and `m.data.type` are identical, discard the message with the lowest lexicographical order.
 
-The Link CRDT has a per-user size limit of 2500.
+The Link CRDT has a per-unit size limit of 2,500.
 
-### 2.1.8 UsernameProof CRDT
+### 3.1.7 UsernameProof CRDT
 
 The UsernameProof CRDT validates and accepts UsernameProof messages. It must also continuously re-validate ownership of the username by running a job at 2am UTC to verify ownership of all fnames and ENS Proofs. The CRDT also ensures that a UsernameProof message m passes these validations:
 
@@ -582,15 +571,15 @@ A conflict occurs if two messages that have the same value for `m.name`. Conflic
 1. If m.data.timestamp values are distinct, discard the message with the lower timestamp.
 2. If m.data.timestamp values are identical, discard the message with the lower fid
 
-The UsernameProof CRDT has a per-user size limit of 10.
+The UsernameProof CRDT has a per-unit size limit of 5.
 
-# 3. Hub Specifications
+# 4. Hub Specifications
 
 A Hub is a node in the Farcaster network that provides an eventually consistent view of network state.
 
 Hubs monitor Farcaster contracts on Ethereum to track the state of identities on the network. Hubs also maintain and synchronize CRDTs with other Hub by exchanging messages. Hubs communicate using a gossip protocol as the primary delivery mechanism with an out-of-band sync process to handle edge cases.
 
-## 3.1 Gossip Specifications
+## 4.1 Gossip Specifications
 
 Hubs communicate using [gossipsub](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md) implemented with [libp2p@0.42.2](https://libp2p.io/).
 
@@ -623,7 +612,6 @@ message ContactInfoContent {
 message GossipMessage {
   oneof content {
     Message message = 1;
-    IdRegistryEvent id_registry_event = 2;
     ContactInfoContent contact_info_content = 3;
   }
   repeated string topics = 4;
@@ -634,13 +622,13 @@ message GossipMessage {
 
 Hubs must ingest all messages received on the messages topic and attempt to merge them, and then rebroadcast them to other hubs. Hubs must also send out its contact information every 60 seconds on the contact_info topic.
 
-## 3.2 Sync Specifications
+## 4.2 Sync Specifications
 
 Hubs can download all missing messages from another hub using an expensive, out-of-band process known as diff sync.
 
 Hubs must perform a diff sync when they connect to the network to ensure that they catch up to the current state. Hubs must also periodically select a random peer and perform diff sync to ensure strong eventual consistency. Gossip alone cannot guarantee this since messages can be dropped or arrive out of order. Ordering affects consistency since non-signer deltas depend on associated signer deltas being merged before them.
 
-### 3.2.1 Trie
+### 4.2.1 Trie
 
 Hubs must maintain a [Merkle Patricia Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/), which contains a Sync ID for each message in a CRDT. A Message's Sync ID is a 36-byte value that is constructed using information in the message:
 
@@ -694,7 +682,7 @@ graph TD
     classDef clear fill:#ffffff;
 ```
 
-### 3.2.2 Algorithm
+### 4.2.2 Algorithm
 
 Hubs can discover missing messages between sync tries by comparing _exclusion sets_, which leverages the fact that tries are chronologically ordered, with new messages usually added on the right-hand side. An exclusion node (green) is one that shares a parent with a node in the latest branch (red). Exclusion nodes at each level are combined and hashed to produce a unique exclusion value for each trie level. The set of exclusion values for all levels is the exclusion set, which is the array `[hash(2021), hash(oct, nov, dec), hash (1, 2)]` in the human-readable example trie below.
 
@@ -763,17 +751,21 @@ graph TD
 <br/>
 Hubs must then request the full trie under the divergent node, which must be compared to find missing branches. The branches are then converted into Sync IDs, requested from the other Hub and merged into the CRDTs.
 
-### 3.2.3 RPC Endpoints
+### 4.2.3 RPC Endpoints
 
 Hubs must implement the following [gRPC](https://grpc.io/) endpoints to enable diff sync.
 
 ```protobuf
 service HubService {
-  rpc GetInfo(Empty) returns (HubInfoResponse);
+  rpc GetInfo(HubInfoRequest) returns (HubInfoResponse);
   rpc GetAllSyncIdsByPrefix(TrieNodePrefix) returns (SyncIds);
   rpc GetAllMessagesBySyncIds(SyncIds) returns (MessagesResponse);
   rpc GetSyncMetadataByPrefix(TrieNodePrefix) returns (TrieNodeMetadataResponse);
   rpc GetSyncSnapshotByPrefix(TrieNodePrefix) returns (TrieNodeSnapshotResponse);
+}
+
+message HubInfoRequest {
+   bool db_stats = 1;
 }
 
 message HubInfoResponse {
@@ -838,18 +830,19 @@ service HubService {
   // User Data
   rpc GetUserData(UserDataRequest) returns (Message);
   rpc GetUserDataByFid(FidRequest) returns (MessagesResponse);
-  rpc GetNameRegistryEvent(NameRegistryEventRequest) returns (NameRegistryEvent);
 
   // Verifications
   rpc GetVerification(VerificationRequest) returns (Message);
   rpc GetVerificationsByFid(FidRequest) returns (MessagesResponse);
 
-  // Signer
-  rpc GetSigner(SignerRequest) returns (Message);
-  rpc GetSignersByFid(FidRequest) returns (MessagesResponse);
-  rpc GetIdRegistryEvent(IdRegistryEventRequest) returns (IdRegistryEvent);
-  rpc GetIdRegistryEventByAddress(IdRegistryEventByAddressRequest) returns (IdRegistryEvent);
-  rpc GetFids(FidsRequest) returns (FidsResponse);
+   // OnChain Events
+   rpc GetOnChainSigner(SignerRequest) returns (OnChainEvent);
+   rpc GetOnChainSignersByFid(FidRequest) returns (OnChainEventResponse);
+   rpc GetOnChainEvents(OnChainEventRequest) returns (OnChainEventResponse);
+   rpc GetIdRegistryOnChainEvent(FidRequest) returns (OnChainEvent);
+   rpc GetIdRegistryOnChainEventByAddress(IdRegistryEventByAddressRequest) returns (OnChainEvent);
+   rpc GetCurrentStorageLimitsByFid(FidRequest) returns (StorageLimitsResponse);  rpc GetFids(FidsRequest) returns (FidsResponse);
+   rpc GetFids(FidsRequest) returns (FidsResponse);
 
   // Username Proofs
   rpc GetUserNameProof(UserNameProofRequest) returns (UserNameProof);
@@ -972,10 +965,6 @@ message UserDataRequest {
   UserDataType user_data_type = 2;
 }
 
-message NameRegistryEventRequest {
-  bytes name = 1;
-}
-
 message VerificationRequest {
   uint64 fid = 1;
   bytes address = 2;
@@ -986,16 +975,105 @@ message SignerRequest {
   bytes signer = 2;
 }
 
-message IdRegistryEventRequest {
-  uint64 fid = 1;
+enum OnChainEventType {
+   EVENT_TYPE_NONE = 0;
+   EVENT_TYPE_SIGNER = 1;
+   EVENT_TYPE_SIGNER_MIGRATED = 2;
+   EVENT_TYPE_ID_REGISTER = 3;
+   EVENT_TYPE_STORAGE_RENT = 4;
 }
 
-message IdRegistryEventByAddressRequest {
-  bytes address = 1;
+message OnChainEvent {
+   OnChainEventType type = 1;
+   uint32 chain_id = 2;
+   uint32 block_number = 3;
+   bytes block_hash = 4;
+   uint64 block_timestamp = 5;
+   bytes transaction_hash = 6;
+   uint32 log_index = 7;
+   uint64 fid = 8;
+   oneof body {
+      SignerEventBody signer_event_body = 9;
+      SignerMigratedEventBody signer_migrated_event_body = 10;
+      IdRegisterEventBody id_register_event_body = 11;
+      StorageRentEventBody storage_rent_event_body = 12;
+   }
+   uint32 tx_index = 13;
+}
+
+enum SignerEventType {
+   SIGNER_EVENT_TYPE_NONE = 0;
+   SIGNER_EVENT_TYPE_ADD = 1;
+   SIGNER_EVENT_TYPE_REMOVE = 2;
+   SIGNER_EVENT_TYPE_ADMIN_RESET = 3;
+}
+
+message SignerEventBody {
+   bytes key = 1;
+   uint32 key_type = 2;
+   SignerEventType event_type = 3;
+   bytes metadata = 4;
+   uint32 metadata_type = 5;
+}
+
+message SignerMigratedEventBody {
+   uint32 migratedAt = 1;
+}
+
+enum IdRegisterEventType {
+   ID_REGISTER_EVENT_TYPE_NONE = 0;
+   ID_REGISTER_EVENT_TYPE_REGISTER = 1;
+   ID_REGISTER_EVENT_TYPE_TRANSFER = 2;
+   ID_REGISTER_EVENT_TYPE_CHANGE_RECOVERY = 3;
+}
+
+message IdRegisterEventBody {
+   bytes to = 1;
+   IdRegisterEventType event_type = 2;
+   bytes from = 3;
+   bytes recovery_address = 4;
+}
+
+message StorageRentEventBody {
+   bytes payer = 1;
+   uint32 units = 2;
+   uint32 expiry = 3;
+}
+
+message OnChainEventRequest {
+   uint64 fid = 1;
+   OnChainEventType event_type = 2;
+   optional uint32 page_size = 3;
+   optional bytes page_token = 4;
+   optional bool reverse = 5;
+}
+
+message OnChainEventResponse {
+   repeated OnChainEvent events = 1;
+   optional bytes next_page_token = 2;
+}
+
+message StorageLimitsResponse {
+   repeated StorageLimit limits = 1;
+}
+
+enum StoreType {
+   STORE_TYPE_NONE = 0;
+   STORE_TYPE_CASTS = 1;
+   STORE_TYPE_LINKS = 2;
+   STORE_TYPE_REACTIONS = 3;
+   STORE_TYPE_USER_DATA = 4;
+   STORE_TYPE_VERIFICATIONS = 5;
+   STORE_TYPE_USERNAME_PROOFS = 6;
+}
+
+message StorageLimit {
+   StoreType store_type = 1;
+   uint64 limit = 2;
 }
 ```
 
-# 4. Fname Specifications
+# 5. Fname Specifications
 
 ### ENS CCIP Contract
 
@@ -1097,13 +1175,13 @@ The nameserver maintains its own ECDSA keypair to counter-sign messages or perfo
 }
 ```
 
-# 5. Versioning
+# 6. Versioning
 
 Farcaster is a long-lived protocol built on the idea of [stability without stagnation](https://doc.rust-lang.org/1.30.0/book/second-edition/appendix-07-nightly-rust.html). Upgrades are designed to be regular and painless, bringing continual improvements for users and developers.
 
 The protocol specification is date versioned with a non-zero leading `YYYY.MM.DD` format like `2021.3.1`. A new version of the protocol specification must be released every 6 weeks. Hot-fix releases are permitted in-between regular if necessary.
 
-## 5.1 Upgrade Process
+## 6.1 Upgrade Process
 
 Hubs implement a specific version of the protocol, which is advertised in their `HubInfoResponse`.
 
