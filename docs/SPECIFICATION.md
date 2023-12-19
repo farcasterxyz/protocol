@@ -1134,7 +1134,7 @@ const types = {
 
 **Verifying Fname Ownership**
 
-Anyone can verify that a user requested verification of a name by making a call to the server. usrs can make a GET request to `/transfers` which returns a paginated list of events with the following schema:
+Anyone can verify that a user requested verification of a name by making a call to the server. users can make a GET request to `/transfers` which returns a paginated list of events with the following schema:
 
 ```jsx
 {
