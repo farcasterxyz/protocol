@@ -2,7 +2,7 @@
 
 Requirements to implement a functional version of the Farcaster protocol.
 
-Version: `2023.10.4`
+Version: `2023.11.15`
 
 ## Table of Contents
 
@@ -21,13 +21,13 @@ There are a set of 3 contracts that keep track of account ids (fids), keys for t
 
 The Id registry contract keeps track of the fids and their custody addresses. It is a simple mapping of fid to custody address. An fid is only valid if it is present in the Id registry.
 
-The [canonical Id registry contract](https://optimistic.etherscan.io/address/0x00000000fcaf86937e41ba038b4fa40baa4b780a) is deployed at `0x00000000fcaf86937e41ba038b4fa40baa4b780a` on Optimism.
+The [canonical Id registry contract](https://optimistic.etherscan.io/address/0x00000000fc6c5f01fc30151999387bb99a9f489b) is deployed at `0x00000000Fc6c5F01Fc30151999387Bb99A9f489b` on Optimism.
 
 ## 1.2 Key Registry
 
 The Key registry contract keeps track of valid signing keys for the fids. A signer for an fid is only valid if it is present in the Key registry for that particular fid. Only the custody address of the fid may add or remove signers for that fid.
 
-The [canonical Key registry contract](https://optimistic.etherscan.io/address/0x00000000fc9e66f1c6d86d750b4af47ff0cc343d) is deployed at `0x00000000fc9e66f1c6d86d750b4af47ff0cc343d` on Optimism.
+The [canonical Key registry contract](https://optimistic.etherscan.io/address/0x00000000Fc1237824fb747aBDE0FF18990E59b7e) is deployed at `0x00000000Fc1237824fb747aBDE0FF18990E59b7e` on Optimism.
 
 ## 1.3 Storage Registry
 
@@ -51,17 +51,19 @@ message Message {
   bytes signature = 4;                   // Signature of the hash digest
   SignatureScheme signature_scheme = 5;  // Signature scheme that produced the signature
   bytes signer = 6;                      // Public key or address of the key pair that produced the signature
+  optional bytes data_bytes = 7;         // MessageData serialized to bytes if using protobuf serialization other than ts-proto
 }
 ```
 
 A Message `m` is considered valid only if:
 
 1. `data` is a valid MessageData object
-2. `hash` is the serialized and hashed digest of data using ts-proto and `hash_scheme`
+2. `hash` is the serialized and hashed digest of `data` and `hash_scheme`
 3. `hash_scheme` is a currently valid hashing scheme
 4. `signature` is the signed output of `hash` using the `signature_scheme` and the `signer`
 5. `signature_scheme` is a valid scheme permitted by the MessageType
 6. `signer` is a valid public key or Ethereum address used to produce the signature
+7. `data_bytes` is a valid serialized MessageData object, to be set in case the ts-proto serialization of `data` does not produce the `hash`. This field is mutually exclusive with `data`.
 
 ### Hashing
 
@@ -75,6 +77,8 @@ enum HashScheme {
   HASH_SCHEME_BLAKE3 = 1;
 }
 ```
+
+Since the protobuf serialization byte stream is not consistent across implementations, the `data_bytes` field is provided to allow for serialization using other protobuf implementations. If `data_bytes` is present, the hub will use it to verify the `hash` digest instead of serializing the `data` using ts-proto.
 
 ### Signing
 
