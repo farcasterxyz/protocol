@@ -113,7 +113,7 @@ Messages are totally ordered by timestamp and hash. Assume two messages $m$ and 
 2. If $m_t$ and $n_t$ are not distinct, and $m_h$ and $n_h$ are distinct, perform a pairwise character comparison.
 3. If $m_t$ and $n_t$ are not distinct, and $m_h$ and $n_h$ are not distinct, $m$ and $n$ must be the same message.
 
-A pariwise comparison of two distinct hashes $x$ and $y$ is performed by comparing the ASCII values of the characters in $x$ and $y$ in order. The hash which has a higher ASCII character value for a distinct pair has the highest order.
+A pairwise comparison of two distinct hashes $x$ and $y$ is performed by comparing the ASCII values of the characters in $x$ and $y$ in order. The hash which has a higher ASCII character value for a distinct pair has the highest order.
 
 ## 2.1 Message Data
 
@@ -1164,7 +1164,7 @@ Results can be filtered with these query string parameters:
 
 ```jsx
 from_id=<id>        // minimum id
-from_ts=<timestamp> // minumum timestamp
+from_ts=<timestamp> // minimum timestamp
 fid=<fid>           // filter events by a particular fid
 name=<username>     // filter events for a particular name
 ```
