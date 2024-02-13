@@ -6,12 +6,12 @@ Version: `2023.11.15`
 
 ## Table of Contents
 
-1. [Contracts](#1-contracts)
-2. [Message Specifications](#1-message-specifications)
-3. [CRDT Specifications](#2-message-graph-specifications)
-4. [Hub Specifications](#3-hub-specifications)
-5. [Fname Specifications](#4-fname-specifications)
-6. [Versioning](#5-versioning)
+1. [Contracts](#1-smart-contracts)
+2. [Message Specifications](#2-message-specifications)
+3. [CRDT Specifications](#3-message-graph-specifications)
+4. [Hub Specifications](#4-hub-specifications)
+5. [Fname Specifications](#5-fname-specifications)
+6. [Versioning](#6-versioning)
 
 # 1. Smart Contracts
 
