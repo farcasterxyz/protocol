@@ -33,7 +33,7 @@ The [canonical Key registry contract](https://optimistic.etherscan.io/address/0x
 
 The Storage registry contract keeps track of the storage allocated to each fid. The storage for an fid is denominated in integer units. Each CRDT specifies the number of messages it can store per unit.
 
-The [canonical Storage registry contract](https://optimistic.etherscan.io/address/0x00000000fcce7f938e7ae6d3c335bd6a1a7c593d) is deployed at `0x00000000fcce7f938e7ae6d3c335bd6a1a7c593d` on Optimism.
+The [canonical Storage registry contract](https://optimistic.etherscan.io/address/0x00000000fcCe7f938e7aE6D3c335bD6a1a7c593D) is deployed at `0x00000000fcCe7f938e7aE6D3c335bD6a1a7c593D` on Optimism.
 
 For a message to be accepted, the fid must be registered in the Id registry, and signed with a valid signer present the Key registry, and the fid must have enough storage allocated in the Storage registry.
 
