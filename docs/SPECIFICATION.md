@@ -444,7 +444,7 @@ A LinkRemove in a message `m` is valid only if it passes these validations:
 ```protobuf
 enum UserNameType {
   USERNAME_TYPE_NONE = 0;
-  USERNAME_TYPE_ENS_FNAME = 1;
+  USERNAME_TYPE_FNAME = 1;
   USERNAME_TYPE_ENS_L1 = 2;
 }
 
@@ -465,7 +465,7 @@ A UsernameProof message `m` must pass these validations:
 3. `m.data.body.timestamp` must be ≤ 10 mins ahead of current timestamp.
 4. `m.data.body.fid` must be a known fid.
 
-A UsernameProof message `m` of type `USERNAME_TYPE_ENS_FNAME` must also pass these validations:
+A UsernameProof message `m` of type `USERNAME_TYPE_FNAME` must also pass these validations:
 
 1. `m.data.body.name` name must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
 2. `m.data.body.owner` must be the custody address of the fid.
