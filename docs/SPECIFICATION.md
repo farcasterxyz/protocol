@@ -144,7 +144,7 @@ message MessageData {
 A MessageData `data` in a Message `m` must pass the following validations:
 
 1. `m.data.type` must be a valid MessageType.
-2. `m.data.fid` must be an integer >= 0.
+2. `m.data.fid` must be an integer > 0.
 3. `m.data.timestamp` must be a valid Farcaster epoch timestamp not more than 600 seconds ahead of the current time.
 4. `m.data.network` must be a valid Network.
 5. `m.data.body` must be a valid body.
