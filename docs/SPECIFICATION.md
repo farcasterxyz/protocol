@@ -496,7 +496,7 @@ CRDTs also prune messages when they reach a certain size per user to prevent the
 All CRDTs must implement the following rules for validating messages:
 
 1. Messages with an EIP-712 signature scheme are only valid if the signing Ethereum address is the owner of the fid.
-2. Messages with an ED25519 signature scheme are only valid if the signing key pair is a Signer is present in the Key registry for the fid and has never been removed.
+2. Messages with an ED25519 signature scheme are only valid if the signing key pair is a Signer present in the Key registry for the fid and has never been removed.
 3. Messages are only valid if the fid is owned by the custody address that signed the message, or the signer of the message, which is specified by the Id Registry.
 
 External actions on blockchains or in other CRDTs can cause messages to become invalid. Such actions must cause an immediate revocation of messages which are discarded from CRDTs, according to the following rules:
@@ -576,12 +576,12 @@ The Link CRDT has a per-unit size limit of 2,500.
 
 The UsernameProof CRDT validates and accepts UsernameProof messages. It must also continuously re-validate ownership of the username by running a job at 2am UTC to verify ownership of all fnames and ENS Proofs. The CRDT also ensures that a UsernameProof message m passes these validations:
 
-1 `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
 A conflict occurs if two messages that have the same value for `m.name`. Conflicts are resolved with the following rules:
 
-1. If m.data.timestamp values are distinct, discard the message with the lower timestamp.
-2. If m.data.timestamp values are identical, discard the message with the lower fid
+1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
+2. If `m.data.timestamp` values are identical, discard the message with the lower fid.
 
 The UsernameProof CRDT has a per-unit size limit of 5.
 
