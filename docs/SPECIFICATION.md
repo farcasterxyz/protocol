@@ -439,7 +439,7 @@ A LinkRemove in a message `m` is valid only if it passes these validations:
 
 1.  `m.data.type` must be `MESSAGE_TYPE_LINK_REMOVE`
 
-## 1.7 Username Proof
+## 2.7 Username Proof
 
 ```protobuf
 enum UserNameType {
