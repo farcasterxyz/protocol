@@ -1172,7 +1172,7 @@ Results can be filtered with these query string parameters:
 
 ```jsx
 from_id=<id>        // minimum id
-from_ts=<timestamp> // minumum timestamp
+from_ts=<timestamp> // minimum timestamp
 fid=<fid>           // filter events by a particular fid
 name=<username>     // filter events for a particular name
 ```
