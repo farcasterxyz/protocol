@@ -6,12 +6,12 @@ Version: `2023.11.15`
 
 ## Table of Contents
 
-1. [Contracts](#1-contracts)
-2. [Message Specifications](#1-message-specifications)
-3. [CRDT Specifications](#2-message-graph-specifications)
-4. [Hub Specifications](#3-hub-specifications)
-5. [Fname Specifications](#4-fname-specifications)
-6. [Versioning](#5-versioning)
+1. [Contracts](#1-smart-contracts)
+2. [Message Specifications](#2-message-specifications)
+3. [CRDT Specifications](#3-message-graph-specifications)
+4. [Hub Specifications](#4-hub-specifications)
+5. [Fname Specifications](#5-fname-specifications)
+6. [Versioning](#6-versioning)
 
 # 1. Smart Contracts
 
@@ -33,7 +33,7 @@ The [canonical Key registry contract](https://optimistic.etherscan.io/address/0x
 
 The Storage registry contract keeps track of the storage allocated to each fid. The storage for an fid is denominated in integer units. Each CRDT specifies the number of messages it can store per unit.
 
-The [canonical Storage registry contract](https://optimistic.etherscan.io/address/0x00000000fcce7f938e7ae6d3c335bd6a1a7c593d) is deployed at `0x00000000fcce7f938e7ae6d3c335bd6a1a7c593d` on Optimism.
+The [canonical Storage registry contract](https://optimistic.etherscan.io/address/0x00000000fcCe7f938e7aE6D3c335bD6a1a7c593D) is deployed at `0x00000000fcCe7f938e7aE6D3c335bD6a1a7c593D` on Optimism.
 
 For a message to be accepted, the fid must be registered in the Id registry, and signed with a valid signer present the Key registry, and the fid must have enough storage allocated in the Storage registry.
 
@@ -113,7 +113,7 @@ Messages are totally ordered by timestamp and hash. Assume two messages $m$ and 
 2. If $m_t$ and $n_t$ are not distinct, and $m_h$ and $n_h$ are distinct, perform a pairwise character comparison.
 3. If $m_t$ and $n_t$ are not distinct, and $m_h$ and $n_h$ are not distinct, $m$ and $n$ must be the same message.
 
-A pariwise comparison of two distinct hashes $x$ and $y$ is performed by comparing the ASCII values of the characters in $x$ and $y$ in order. The hash which has a higher ASCII character value for a distinct pair has the highest order.
+A pairwise comparison of two distinct hashes $x$ and $y$ is performed by comparing the ASCII values of the characters in $x$ and $y$ in order. The hash which has a higher ASCII character value for a distinct pair has the highest order.
 
 ## 2.1 Message Data
 
@@ -144,7 +144,7 @@ message MessageData {
 A MessageData `data` in a Message `m` must pass the following validations:
 
 1. `m.data.type` must be a valid MessageType.
-2. `m.data.fid` must be an integer >= 0.
+2. `m.data.fid` must be an integer > 0.
 3. `m.data.timestamp` must be a valid Farcaster epoch timestamp not more than 600 seconds ahead of the current time.
 4. `m.data.network` must be a valid Network.
 5. `m.data.body` must be a valid body.
@@ -444,7 +444,7 @@ A LinkRemove in a message `m` is valid only if it passes these validations:
 ```protobuf
 enum UserNameType {
   USERNAME_TYPE_NONE = 0;
-  USERNAME_TYPE_ENS_FNAME = 1;
+  USERNAME_TYPE_FNAME = 1;
   USERNAME_TYPE_ENS_L1 = 2;
 }
 
@@ -465,7 +465,7 @@ A UsernameProof message `m` must pass these validations:
 3. `m.data.body.timestamp` must be ≤ 10 mins ahead of current timestamp.
 4. `m.data.body.fid` must be a known fid.
 
-A UsernameProof message `m` of type `USERNAME_TYPE_ENS_FNAME` must also pass these validations:
+A UsernameProof message `m` of type `USERNAME_TYPE_FNAME` must also pass these validations:
 
 1. `m.data.body.name` name must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
 2. `m.data.body.owner` must be the custody address of the fid.
@@ -496,7 +496,7 @@ CRDTs also prune messages when they reach a certain size per user to prevent the
 All CRDTs must implement the following rules for validating messages:
 
 1. Messages with an EIP-712 signature scheme are only valid if the signing Ethereum address is the owner of the fid.
-2. Messages with an ED25519 signature scheme are only valid if the signing key pair is a Signer is present in the Key registry for the fid and has never been removed.
+2. Messages with an ED25519 signature scheme are only valid if the signing key pair is a Signer present in the Key registry for the fid and has never been removed.
 3. Messages are only valid if the fid is owned by the custody address that signed the message, or the signer of the message, which is specified by the Id Registry.
 
 External actions on blockchains or in other CRDTs can cause messages to become invalid. Such actions must cause an immediate revocation of messages which are discarded from CRDTs, according to the following rules:
@@ -576,12 +576,12 @@ The Link CRDT has a per-unit size limit of 2,500.
 
 The UsernameProof CRDT validates and accepts UsernameProof messages. It must also continuously re-validate ownership of the username by running a job at 2am UTC to verify ownership of all fnames and ENS Proofs. The CRDT also ensures that a UsernameProof message m passes these validations:
 
-1 `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
 
 A conflict occurs if two messages that have the same value for `m.name`. Conflicts are resolved with the following rules:
 
-1. If m.data.timestamp values are distinct, discard the message with the lower timestamp.
-2. If m.data.timestamp values are identical, discard the message with the lower fid
+1. If `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
+2. If `m.data.timestamp` values are identical, discard the message with the lower fid.
 
 The UsernameProof CRDT has a per-unit size limit of 5.
 
