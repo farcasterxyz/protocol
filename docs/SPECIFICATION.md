@@ -324,7 +324,7 @@ A CastId `c` is valid only if it passes these validations:
 1. `c.fid` is an integer > 0
 2. `c.hash` is exactly 20 bytes.
 
-## 1.4 Reactions
+## 2.5 Reactions
 
 A Reaction is a relationship between a user and a cast which can be one of several types.
 
@@ -362,7 +362,7 @@ A ReactionRemove in a message `m` is valid only if it passes these validations:
 
 1. `m.data.type` must be `MESSAGE_TYPE_REACTION_REMOVE`
 
-## 2.5 Verifications
+## 2.6 Verifications
 
 A Verification is a cryptographic proof of ownership of an Ethereum address.
 
@@ -409,7 +409,7 @@ A VerificationAddEthAddressBody or VerificationRemoveBody in a message `m` is va
 11. If `m.data.body.verification_type` is `1`:
     a. `m.data.body.chain_id` must be `1` or `10`.
 
-## 2.6 Links
+## 2.7 Links
 
 A Link is a relationship between two users which can be one of several types. Links are added with a `LinkAdd` message and removed with a `LinkRemove` message which shares a common body structure.
 
@@ -439,7 +439,7 @@ A LinkRemove in a message `m` is valid only if it passes these validations:
 
 1.  `m.data.type` must be `MESSAGE_TYPE_LINK_REMOVE`
 
-## 2.7 Username Proof
+## 2.8 Username Proof
 
 ```protobuf
 enum UserNameType {
