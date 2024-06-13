@@ -15,7 +15,7 @@ Version: `2023.11.15`
 
 # 1. Smart Contracts
 
-There are a set of 3 contracts that keep track of account ids (fids), keys for the fids and the storage allocated to the fids.
+There is a set of 3 contracts that keep track of account ids (fids), keys for the fids and the storage allocated to the fids.
 
 ## 1.1 Id Registry
 
@@ -278,7 +278,7 @@ message CastAddBody {
   };
   string text = 4;                        // Text of the cast
   repeated uint32 mentions_positions = 5; // Byte positions of the mentions in the text
-  repeated Embed embeds = 6;              // URIs or CastIds to embedded in the cast
+  repeated Embed embeds = 6;              // URIs or CastIds to be embedded in the cast
 }
 
 
@@ -416,7 +416,7 @@ A Link is a relationship between two users which can be one of several types. Li
 ```protobuf
 message LinkBody {
   string type = 1;
-  optional uint32 displayTimestamp = 2; // If set, clients should use this as the follow create time
+  optional uint32 displayTimestamp = 2; // If set, clients should use this as the following create time
   oneof target {
     uint64 fid = 3;
   }
