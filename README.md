@@ -4,7 +4,7 @@
 
 ## Getting Started
 
-Farcaster is a protocol for building decentralized social apps. This repository contains the technical specification for implementing Farcaster.
+Farcaster is a protocol for building decentralized social apps. This repository contains the technical specifications for implementing Farcaster.
 
 If you are instead looking for:
 
