@@ -14,7 +14,7 @@ If you're new to Farcaster we recommend joining the telegram channels and watchi
 | [Dev Call Agenda](https://warpcast.notion.site/b08fed5cbf884e6a80b3acc2dd0666b2?v=4b51e7442af14b48a69871299c22e288)                                                                          | Agendas for upcoming and prior dev calls.                      |
 | [Dev Call Recordings](https://www.youtube.com/watch?v=lmGXWP5m1_Y&list=PL0eq1PLf6eUeZnPtyKMS6uN9I5iRIlnvq)                                                                                   | Recordings of prior dev calls.                                 |
 
-## What to Contribute
+## Contributing Guidelines
 
 No contribution is too small and we welcome your help. There's always something to work on, no matter how
 experienced you are. You can help improve Farcaster by:
