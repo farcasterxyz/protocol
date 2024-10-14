@@ -1093,7 +1093,7 @@ A CCIP [ENSIP-10](https://docs.ens.domains/ens-improvement-proposals/ensip-10-wi
 
 ### **Name Server**
 
-The server which resolves `*.fcast.id` names lives at `fnames.facaster.xyz`. Fnames can be claimed by submitting an EIP-712 signed message that proves ownership of an fid that does not yet have an fname. The server also provides a method to transfer fnames to other fids by proving ownership of the fname.
+The server which resolves `*.fcast.id` names lives at `fnames.farcaster.xyz`. Fnames can be claimed by submitting an EIP-712 signed message that proves ownership of an fid that does not yet have an fname. The server also provides a method to transfer fnames to other fids by proving ownership of the fname.
 
 Usernames are also valid subdomains (e.g. [foo.fcast.id](http://foo.fcast.id) ) though they do not currently resolve to anything. A future upgrade to the nameserver may allow the owner to set a redirect record here. The following usernames are not available for registration, since they collide with existing subdomains — `www`, `fnames`
 
