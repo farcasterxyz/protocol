@@ -6,7 +6,7 @@ Version: `2023.11.15`
 
 ## Table of Contents
 
-1. [Contracts](#1-smart-contracts)
+1. [Smart Contracts](#1-smart-contracts)
 2. [Message Specifications](#2-message-specifications)
 3. [CRDT Specifications](#3-message-graph-specifications)
 4. [Hub Specifications](#4-hub-specifications)
@@ -324,7 +324,7 @@ A CastId `c` is valid only if it passes these validations:
 1. `c.fid` is an integer > 0
 2. `c.hash` is exactly 20 bytes.
 
-## 1.4 Reactions
+## Reactions
 
 A Reaction is a relationship between a user and a cast which can be one of several types.
 
