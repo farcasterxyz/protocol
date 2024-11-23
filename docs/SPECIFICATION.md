@@ -308,7 +308,7 @@ A CastAddBody in a message `m` is valid only if it passes these validations:
 5. `m.data.body.mentions` must contain between 0 and 10 256-bit integer values.
 6. `m.data.body.parent`, if present, must be a valid CastId or a UTF8 string whose length is >= 1 byte and <= 256 bytes.
 7. `m.data.body.text` must contain <= 1024 bytes and be a valid UTF8 string.
-8. `m.data.body.type` must be either `CastType.CAST` for casts with text length of 0 <= length <= 320 and `CastType.LONG` for casts that are 321 <= length <= 1024
+8. `m.data.body.type` must be either `CastType.CAST` for casts with text length of 0 <= length <= 320 and `CastType.LONG_CAST` for casts that are 321 <= length <= 1024
 9. `m.data.body.mentions_positions` must have unique integers between 0 and length of `text` inclusive.
 10. `m.data.body.mentions_positions` integers must be in ascending order and must have as many elements as `mentions`.
 11. `m.data.body.embeds` can contain up to 2 embeds, each of which is a CastId or valid UTF8 string whose length is >=1 byte and <= 256bytes.
