@@ -35,7 +35,7 @@ The Storage registry contract keeps track of the storage allocated to each fid. 
 
 The [canonical Storage registry contract](https://optimistic.etherscan.io/address/0x00000000fcCe7f938e7aE6D3c335bD6a1a7c593D) is deployed at `0x00000000fcCe7f938e7aE6D3c335bD6a1a7c593D` on Optimism.
 
-For a message to be accepted, the fid must be registered in the Id registry, and signed with a valid signer present the Key registry, and the fid must have enough storage allocated in the Storage registry.
+For a message to be accepted, the fid must be registered in the Id registry, and signed with a valid signer present in the Key registry, and the fid must have enough storage allocated in the Storage registry.
 
 # 2. Message Specifications
 
@@ -483,7 +483,7 @@ A UsernameProof message `m` of type `USERNAME_TYPE_ENS_L1` must also pass these 
 
 # 3. Message-Graph Specifications
 
-A message-graph is a data structure that allows state to be updated concurrently without requiring a central authority to resolve conflicts. It consists of a series of anonymous Δ-state CRDT's, each of which govern a data type and how it can be updated. The message-graph is idempotent but because of its dependency on state, it is not commutative or associative.
+A message-graph is a data structure that allows state to be updated concurrently without requiring a central authority to resolve conflicts. It consists of a series of anonymous Δ-state CRDT's, each of which governs a data type and how it can be updated. The message-graph is idempotent but because of its dependency on state, it is not commutative or associative.
 
 ## 3.1 CRDTs
 
