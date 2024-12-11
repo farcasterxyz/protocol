@@ -127,7 +127,7 @@ An astute reader will note that Farcaster lacks features common in social networ
 
 Farcaster makes these tradeoffs to achieve a level of decentralization that puts users and developers in control. It is far easier to add features to a decentralized network than it is to try and decentralize a feature-rich network. The protocol is robust enough to build simple, practical and public social networks that people will use.
 
-# 7. Acknowledgements
+# 7. Acknowledgments
 
 The Farcaster protocol would not have been possible without significant contributions from [Varun Srinivasan](https://github.com/varunsrin), [Dan Romero](https://github.com/danromero), [Shane da Silva](https://github.com/sds), [Sean Yu](https://github.com/seansu4you87), [Gavi Galloway](https://github.com/gsgalloway), [Paul Fletcher-Hill](https://github.com/pfletcherhill), [Sanjay Prabhu](https://github.com/sanjayprabhu), Sagar Dhawan, [Cassandra Heart](https://github.com/CassOnMars), [Aditya Kulkarni](https://github.com/adityapk00) and [horsefacts](https://github.com/horsefacts).
 
