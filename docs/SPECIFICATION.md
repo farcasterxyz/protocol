@@ -507,7 +507,7 @@ External actions on blockchains or in other CRDTs can cause messages to become i
 
 The UserData CRDT validates and accepts UserDataAdd messages. The CRDT also ensures that a UserDataAdd message `m` passes these validations:
 
-1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+1. `m.signer` must be a valid key with `Keystate.ADDED` in the `KeyRegistry` contract for `m.data.fid`.
 
 A conflict occurs if two messages have the same values for `m.data.fid` and `m.data.body.type`. Conflicts are resolved with the following rules:
 
@@ -520,7 +520,7 @@ The UserData CRDT has a per-unit size limit of 50, even though this is practical
 
 The Cast CRDT validates and accepts CastAdd and CastRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
-1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+1. `m.signer` must be a valid key with `Keystate.ADDED` in the `KeyRegistry` contract for `m.data.fid`.
 
 A conflict occurs if there exists a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. Conflicts are resolved with the following rules:
 
@@ -534,7 +534,7 @@ The Cast CRDT has a per-unit size limit of 5,000.
 
 The Reaction CRDT validates and accepts ReactionAdd and ReactionRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
-1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+1. `m.signer` must be a valid key with `Keystate.ADDED` in the `KeyRegistry` contract for `m.data.fid`.
 
 A conflict occurs if two messages have the same values for `m.data.fid`, `m.data.body.target` and `m.data.body.type`. Conflicts are resolved with the following rules:
 
@@ -548,7 +548,7 @@ The Reaction CRDT has a per-unit size limit of 2,500.
 
 The Verification CRDT validates and accepts VerificationAddEthereumAddress and VerificationRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
-1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+1. `m.signer` must be a valid key with `Keystate.ADDED` in the `KeyRegistry` contract for `m.data.fid`.
 
 A conflict occurs if there are two messages with the same value for `m.data.body.address`. Conflicts are resolved with the following rules:
 
@@ -562,7 +562,7 @@ The Verification CRDT has a per-unit size limit of 25.
 
 The Link CRDT validates and accepts LinkAdd and LinkRemove messages. The CRDT also ensures that the message `m` passes these validations:
 
-1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+1. `m.signer` must be a valid key with `Keystate.ADDED` in the `KeyRegistry` contract for `m.data.fid`.
 
 A conflict occurs if there are two messages with the same values for `m.data.fid`, `m.data.body.type`, `m.data.body.target`. Conflicts are resolved with the following rules:
 
@@ -576,7 +576,7 @@ The Link CRDT has a per-unit size limit of 2,500.
 
 The UsernameProof CRDT validates and accepts UsernameProof messages. It must also continuously re-validate ownership of the username by running a job at 2am UTC to verify ownership of all fnames and ENS Proofs. The CRDT also ensures that a UsernameProof message m passes these validations:
 
-1. `m.signer` must be a valid Signer in the add-set of the Signer CRDT for `message.fid`
+1. `m.signer` must be a valid key with `Keystate.ADDED` in the `KeyRegistry` contract for `m.data.fid`.
 
 A conflict occurs if two messages that have the same value for `m.name`. Conflicts are resolved with the following rules:
 
