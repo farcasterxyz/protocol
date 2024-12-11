@@ -195,7 +195,7 @@ A user authorizes an application's Signer with a signature from their custody ad
 ```mermaid
 graph TD
     Custody2([Custody Address]) --> SignerA1([Signer A])
-    Custody2 -->  |ECDSA Signature|SignerC([Signer B])
+    Custody2 -->  |ECDSA / EIP1271 Signature|SignerC([Signer B])
     SignerC -->  CastA[Cast]
     SignerC -->  |EdDSA Signature| CastB[Cast]
     SignerA1 -->  CastC[Cast]
