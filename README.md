@@ -8,7 +8,7 @@ Farcaster is a protocol for building decentralized social apps. This repository 
 
 If you are instead looking for:
 
-1. How to get started, check out [farcaster.xyz](https://www.farcaster.xyz).
+1. To get started, check out [farcaster.xyz](https://www.farcaster.xyz).
 2. Developer documentation, check out [docs.farcaster.xyz](https://docs.farcaster.xyz).
 
 ## Specifications
