@@ -468,7 +468,7 @@ A UsernameProof message `m` must pass these validations:
 
 A UsernameProof message `m` of type `USERNAME_TYPE_FNAME` must also pass these validations:
 
-1. `m.data.body.name` name must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
+1. `m.data.body.name` must match the regular expression `/^[a-z0-9][a-z0-9-]{0,15}$/`.
 2. `m.data.body.owner` must be the custody address of the fid.
 3. `m.data.body.signature` must be a valid ECDSA signature on the EIP-712 Username Proof message from the owner or the public key of the fname server.
 
