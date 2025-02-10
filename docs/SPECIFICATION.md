@@ -275,7 +275,7 @@ message CastAddBody {
   oneof parent {                          // Optional parent of the cast
     CastId parent_cast_id = 3;
     string parent_url = 7; // Parent URL
-  };
+  }
   string text = 4;                        // Text of the cast
   repeated uint32 mentions_positions = 5; // Byte positions of the mentions in the text
   repeated Embed embeds = 6;              // URIs or CastIds to be embedded in the cast
