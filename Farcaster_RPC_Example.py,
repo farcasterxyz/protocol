@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+# Example Python script to interact with Farcaster Protocol
+
+import requests
+
+# Example: Fetch latest casts from Farcaster API
+API_URL = "https://api.farcaster.xyz/v1/casts"
+
+def get_latest_casts(limit=5):
+    params = {"limit": limit}
+    response = requests.get(API_URL, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        for cast in data.get("casts", []):
+            print(f"{cast['username']}: {cast['text']}")
+    else:
+        print(f"Error fetching casts: {response.status_code}")
+
+if __name__ == "__main__":
+    print("Latest Farcaster casts:")
+    get_latest_casts()
