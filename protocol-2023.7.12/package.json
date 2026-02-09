@@ -1,0 +1,18 @@
+{
+  "name": "farcaster-protocol",
+  "version": "0.0.1",
+  "description": "specification of the farcaster protocol",
+  "main": "README.md",
+  "repository": "git@github.com:farcasterxyz/protocol.git",
+  "author": "Varun Srinivasan <varunsrin@gmail.com>",
+  "license": "unlicensed",
+  "devDependencies": {
+    "prettier": "^2.7.1"
+  },
+  "scripts": {
+    "lint": "yarn prettier",
+    "lint:check": "yarn prettier:check",
+    "prettier": "prettier --config \"./.prettierrc.yml\" --write \"**/*.{json,md}\"",
+    "prettier:check": "prettier --config \"./.prettierrc.yml\" --check \"**/*.{json,md}\""
+  }
+}
