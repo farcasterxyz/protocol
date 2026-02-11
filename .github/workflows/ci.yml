@@ -31,7 +31,9 @@ jobs:
           key: ${{ runner.os }}--node--${{ hashFiles('**/yarn.lock') }}
 
       - name: Install dependencies
-        run: yarn install
+        run: |
+          npx node-gyp install
+          yarn install
 
       - name: Run prettier check
         run: yarn lint:check
