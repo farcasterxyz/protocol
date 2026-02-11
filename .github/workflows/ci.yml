@@ -25,15 +25,13 @@ jobs:
 
       - name: Restore cached dependencies for Node modules
         id: module-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/node_modules
           key: ${{ runner.os }}--node--${{ hashFiles('**/yarn.lock') }}
 
       - name: Install dependencies
-        run: |
-          npx node-gyp@12.2.0 install
-          yarn install
+        run: yarn install
 
       - name: Run prettier check
         run: yarn lint:check
