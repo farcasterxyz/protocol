@@ -590,7 +590,7 @@ The UsernameProof CRDT has a per-unit size limit of 5.
 
 A Hub is a node in the Farcaster network that provides an eventually consistent view of network state.
 
-Hubs monitor Farcaster contracts on Ethereum to track the state of identities on the network. Hubs also maintain and synchronize CRDTs with other Hub by exchanging messages. Hubs communicate using a gossip protocol as the primary delivery mechanism with an out-of-band sync process to handle edge cases.
+Hubs monitor Farcaster contracts on Ethereum to track the state of identities on the network. Hubs also maintain and synchronize CRDTs with other Hubs by exchanging messages. Hubs communicate using a gossip protocol as the primary delivery mechanism with an out-of-band sync process to handle edge cases.
 
 ## 4.1 Gossip Specifications
 
