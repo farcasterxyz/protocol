@@ -1100,7 +1100,7 @@ Usernames are also valid subdomains (e.g. [foo.fcast.id](http://foo.fcast.id) ) 
 
 **Managing Fname Ownership**
 
-A POST request to the `/transfers` endpoint can be made register, move or deregister a username. The request body must contain :
+A POST request to the `/transfers` endpoint can be made to register, move or deregister a username. The request body must contain :
 
 ```jsx
 {
