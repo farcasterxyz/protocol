@@ -525,9 +525,9 @@ The Cast CRDT validates and accepts CastAdd and CastRemove messages. The CRDT al
 
 A conflict occurs if there exists a CastAdd Message and a CastRemove message whose `m.hash` and `m.data.body.target_hash` are identical, or if there are two CastRemove messages whose `m.data.body.target_hash` are identical. Conflicts are resolved with the following rules:
 
-2. If `m.data.type` is distinct, discard the CastAdd message.
-1. If `m.data.type` is identical and `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
-1. If `m.data.timestamp` and `m.data.type` values are identical, discard the message with the lower lexicographical order.
+1. If `m.data.type` is distinct, discard the CastAdd message.
+2. If `m.data.type` is identical and `m.data.timestamp` values are distinct, discard the message with the lower timestamp.
+3. If `m.data.timestamp` and `m.data.type` values are identical, discard the message with the lower lexicographical order.
 
 The Cast CRDT has a per-unit size limit of 5,000.
 
