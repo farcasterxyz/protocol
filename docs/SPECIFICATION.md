@@ -202,7 +202,7 @@ graph TD
     SignerA1 -->  CastD[Reaction]
 ```
 
-A Signer is added or removed by registering the public key of the signer to an fid with a smart contract at a well known address. Signers can only be added for the fid owned by the caller of the contract.
+A Signer is added or removed by registering the public key of the signer to a fid with a smart contract at a well known address. Signers can only be added for the fid owned by the caller of the contract.
 
 ## 2.3 User Data
 
