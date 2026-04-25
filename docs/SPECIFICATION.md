@@ -847,6 +847,7 @@ service HubService {
   // Verifications
   rpc GetVerification(VerificationRequest) returns (Message);
   rpc GetVerificationsByFid(FidRequest) returns (MessagesResponse);
+  rpc GetFidByVerification(VerificationFidRequest) returns (VerificationFidResponse);
 
    // OnChain Events
    rpc GetOnChainSigner(SignerRequest) returns (OnChainEvent);
@@ -1083,6 +1084,14 @@ enum StoreType {
 message StorageLimit {
    StoreType store_type = 1;
    uint64 limit = 2;
+}
+
+message VerificationFidRequest {
+  bytes address = 1;
+}
+
+message VerificationFidResponse {
+  uint64 fid = 1;
 }
 ```
 
