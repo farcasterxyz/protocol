@@ -115,6 +115,10 @@ Messages are totally ordered by timestamp and hash. Assume two messages $m$ and 
 
 A pairwise comparison of two distinct hashes $x$ and $y$ is performed by comparing the ASCII values of the characters in $x$ and $y$ in order. The hash which has a higher ASCII character value for a distinct pair has the highest order.
 
+### Conformance Vectors
+
+A versioned set of golden conformance vectors for the message cryptographic layer (canonical `data_bytes` serialization, BLAKE3-160 `hash`, Ed25519 `signature`, and `signer`) is checked in under [`/vectors`](../vectors). Each vector carries its `data_bytes` so that a client can verify the `hash` and `signature` against the exact serialization they were produced over, without needing to reproduce another implementation's encoding (see the note on serialization inconsistency above). An alternative client can run these vectors in its own CI to prove encoding/hash/signature parity with the reference implementation.
+
 ## 2.1 Message Data
 
 A MessageData contains the payload of the Message, which is hashed and signed to produce the message.

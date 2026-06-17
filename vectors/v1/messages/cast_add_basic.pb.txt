@@ -1,0 +1,18 @@
+# Wire-format disassembly of the Message (review aid; see README).
+Message {
+  1 data {  # 33 bytes
+    1 type: 1
+    2 fid: 1234
+    3 timestamp: 94608000
+    4 network: 1
+    5 cast_add_body {  # 19 bytes
+      4: "Hello, Farcaster!"  # string, 17 bytes
+    }
+  }
+  2 hash: 0x27f49c6928369d64495f4c4dd142c2e7389ebf1e  # 20 bytes
+  3 hash_scheme: 1
+  4 signature: 0x4f67a836aa72f3c5a2658126479748ffb21d9cb862bccacd2a731990d1650ee6334d993a4563190bc96242f37da24c2de79c6c425d35a7ec3995454e90cb3f0f  # 64 bytes
+  5 signature_scheme: 1
+  6 signer: 0x69104ef20c6676aacc9e8c291800d1b7e911e20f85b4066156ea118ace44b8d7  # 32 bytes
+  7 data_bytes: 0x080110d2091880b58e2d20012a13221148656c6c6f2c2046617263617374657221  # 33 bytes
+}
