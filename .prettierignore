@@ -1,0 +1,5 @@
+# Generated conformance-corpus manifests are produced byte-for-byte by the reference
+# implementation (farcasterxyz/snapchain) and copied here verbatim. Reformatting them would
+# drift them from the source of truth on every regeneration. The binary .pb / .pb.txt golden
+# files aren't matched by the lint glob (**/*.{json,md}), so they need no entry here.
+vectors/**/*.json
