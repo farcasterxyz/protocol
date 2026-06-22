@@ -123,7 +123,7 @@ graph LR
 
 # 7. Conclusion
 
-An astute reader will note that Farcaster lacks features common in social networks. Timestamps are unreliable, data isn't permanent and there are no mechanisms for private messaging. The eventually consistent nature of the network also means that developers are exposed to more complexity when building applications.
+An astute reader will note that Farcaster lacks features common in social networks. Timestamps are unreliable, data isn't permanent, and there are no mechanisms for private messaging. The eventually consistent nature of the network also means that developers are exposed to more complexity when building applications.
 
 Farcaster makes these tradeoffs to achieve a level of decentralization that puts users and developers in control. It is far easier to add features to a decentralized network than it is to try and decentralize a feature-rich network. The protocol is robust enough to build simple, practical and public social networks that people will use.
 
